@@ -1,0 +1,16 @@
+{
+  "resourceType": "ConceptMap",
+  "id": "clinic3-local-to-snomed",
+  "url": "https://example.org/aof/ConceptMap/clinic3-local-to-snomed",
+  "name": "Clinic3LocalToSnomed",
+  "title": "Clinic 3 local diagnosis codes to SNOMED CT",
+  "status": "active",
+  "group": [{
+    "source": "http://clinic-3.example/codes",
+    "target": "http://snomed.info/sct",
+    "element": [
+      {"code": "DM2", "display": "Diabète type 2 (local)",
+       "target": [{"code": "44054006", "display": "Diabetes mellitus type 2", "equivalence": "equivalent"}]}
+    ]
+  }]
+}

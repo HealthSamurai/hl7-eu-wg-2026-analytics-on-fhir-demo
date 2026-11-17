@@ -1,0 +1,25 @@
+{
+  "resourceType": "AidboxMaterialization",
+  "id": "patients",
+  "meta": {
+    "profile": [
+      "http://health-samurai.io/fhir/core/StructureDefinition/aidboxmaterialization-pgProfile"
+    ]
+  },
+  "type": "ViewDefinition",
+  "target": "https://example.org/aof/ViewDefinition/patients",
+  "parameter": [
+    {
+      "name": "schema",
+      "valueString": "sof"
+    },
+    {
+      "name": "name",
+      "valueString": "patients"
+    },
+    {
+      "name": "materializationType",
+      "valueCode": "view"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "resourceType": "ValueSet",
+  "id": "diabetes",
+  "url": "https://example.org/aof/ValueSet/diabetes",
+  "name": "Diabetes",
+  "title": "Diabetes: codes used by the three clinics",
+  "status": "active",
+  "compose": {
+    "include": [
+      {
+        "system": "http://snomed.info/sct",
+        "concept": [
+          {
+            "code": "44054006",
+            "display": "Diabetes mellitus type 2"
+          },
+          {
+            "code": "73211009",
+            "display": "Diabetes mellitus"
+          }
+        ]
+      },
+      {
+        "system": "http://hl7.org/fhir/sid/icd-10",
+        "concept": [
+          {
+            "code": "E11.9"
+          },
+          {
+            "code": "E11.65"
+          },
+          {
+            "code": "E11.22"
+          }
+        ]
+      },
+      {
+        "system": "http://fhir.de/CodeSystem/bfarm/icd-10-gm",
+        "concept": [
+          {
+            "code": "E11.90"
+          },
+          {
+            "code": "E11.91"
+          },
+          {
+            "code": "E11.20"
+          }
+        ]
+      },
+      {
+        "system": "http://clinic-3.example/codes",
+        "concept": [
+          {
+            "code": "DM2",
+            "display": "Diabète type 2 (local)"
+          }
+        ]
+      }
+    ]
+  }
+}

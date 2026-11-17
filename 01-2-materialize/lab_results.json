@@ -1,0 +1,25 @@
+{
+  "resourceType": "AidboxMaterialization",
+  "id": "lab_results",
+  "meta": {
+    "profile": [
+      "http://health-samurai.io/fhir/core/StructureDefinition/aidboxmaterialization-pgProfile"
+    ]
+  },
+  "type": "ViewDefinition",
+  "target": "https://example.org/aof/ViewDefinition/lab_results",
+  "parameter": [
+    {
+      "name": "schema",
+      "valueString": "sof"
+    },
+    {
+      "name": "name",
+      "valueString": "lab_results"
+    },
+    {
+      "name": "materializationType",
+      "valueCode": "view"
+    }
+  ]
+}

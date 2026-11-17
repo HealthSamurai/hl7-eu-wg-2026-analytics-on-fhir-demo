@@ -1,0 +1,64 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "conditions",
+  "url": "https://example.org/aof/ViewDefinition/conditions",
+  "name": "conditions",
+  "title": "Diagnoses: one row per code",
+  "status": "active",
+  "resource": "Condition",
+  "select": [
+    {
+      "column": [
+        {
+          "name": "condition_id",
+          "path": "getResourceKey()"
+        },
+        {
+          "name": "patient_id",
+          "path": "subject.getReferenceKey(Patient)"
+        },
+        {
+          "name": "clinical_status",
+          "path": "clinicalStatus.coding.code.first()"
+        },
+        {
+          "name": "onset",
+          "path": "onset.ofType(dateTime)",
+          "type": "dateTime"
+        },
+        {
+          "name": "recorded",
+          "path": "recordedDate",
+          "type": "dateTime"
+        }
+      ]
+    },
+    {
+      "forEach": "code.coding",
+      "column": [
+        {
+          "name": "coding_idx",
+          "path": "%rowIndex",
+          "type": "integer"
+        },
+        {
+          "name": "system",
+          "path": "system"
+        },
+        {
+          "name": "code",
+          "path": "code"
+        },
+        {
+          "name": "display",
+          "path": "display"
+        }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "verificationStatus.coding.code.first() != 'entered-in-error'"
+    }
+  ]
+}

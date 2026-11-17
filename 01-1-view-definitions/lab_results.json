@@ -1,0 +1,62 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "lab_results",
+  "url": "https://example.org/aof/ViewDefinition/lab_results",
+  "name": "lab_results",
+  "title": "Lab results: HbA1c, eGFR, uACR …",
+  "status": "active",
+  "resource": "Observation",
+  "select": [
+    {
+      "column": [
+        {
+          "name": "obs_id",
+          "path": "getResourceKey()"
+        },
+        {
+          "name": "patient_id",
+          "path": "subject.getReferenceKey(Patient)"
+        },
+        {
+          "name": "effective",
+          "path": "effective.ofType(dateTime)",
+          "type": "dateTime"
+        },
+        {
+          "name": "value",
+          "path": "value.ofType(Quantity).value",
+          "type": "decimal"
+        },
+        {
+          "name": "unit",
+          "path": "value.ofType(Quantity).code"
+        },
+        {
+          "name": "status",
+          "path": "status"
+        }
+      ]
+    },
+    {
+      "forEach": "code.coding",
+      "column": [
+        {
+          "name": "system",
+          "path": "system"
+        },
+        {
+          "name": "code",
+          "path": "code"
+        }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "category.coding.where(system = 'http://terminology.hl7.org/CodeSystem/observation-category' and code = 'laboratory').exists()"
+    },
+    {
+      "path": "status = 'final' or status = 'amended' or status = 'corrected'"
+    }
+  ]
+}

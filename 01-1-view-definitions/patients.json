@@ -1,0 +1,41 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "patients",
+  "url": "https://example.org/aof/ViewDefinition/patients",
+  "name": "patients",
+  "title": "Patients: who and where",
+  "status": "active",
+  "resource": "Patient",
+  "select": [
+    {
+      "column": [
+        {
+          "name": "patient_id",
+          "path": "getResourceKey()"
+        },
+        {
+          "name": "gender",
+          "path": "gender"
+        },
+        {
+          "name": "birth_date",
+          "path": "birthDate",
+          "type": "date"
+        },
+        {
+          "name": "deceased",
+          "path": "deceased.ofType(boolean) = true or deceased.ofType(dateTime).exists()",
+          "type": "boolean"
+        },
+        {
+          "name": "postal_code",
+          "path": "address.where(use = 'home').postalCode.first()"
+        },
+        {
+          "name": "clinic_id",
+          "path": "managingOrganization.getReferenceKey(Organization)"
+        }
+      ]
+    }
+  ]
+}

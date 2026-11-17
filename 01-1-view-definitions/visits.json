@@ -1,0 +1,46 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "visits",
+  "url": "https://example.org/aof/ViewDefinition/visits",
+  "name": "visits",
+  "title": "Visits",
+  "status": "active",
+  "resource": "Encounter",
+  "select": [
+    {
+      "column": [
+        {
+          "name": "encounter_id",
+          "path": "getResourceKey()"
+        },
+        {
+          "name": "patient_id",
+          "path": "subject.getReferenceKey(Patient)"
+        },
+        {
+          "name": "class",
+          "path": "class.code"
+        },
+        {
+          "name": "start",
+          "path": "period.start",
+          "type": "dateTime"
+        },
+        {
+          "name": "end",
+          "path": "period.end",
+          "type": "dateTime"
+        },
+        {
+          "name": "clinic_id",
+          "path": "serviceProvider.getReferenceKey(Organization)"
+        }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "status = 'finished'"
+    }
+  ]
+}

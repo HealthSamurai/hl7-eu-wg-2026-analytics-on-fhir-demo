@@ -1,0 +1,18 @@
+{
+  "resourceType": "ConceptMap",
+  "id": "fhir-system-to-omop-vocabulary",
+  "url": "https://example.org/aof/ConceptMap/fhir-system-to-omop-vocabulary",
+  "name": "FhirSystemToOmopVocabulary",
+  "title": "FHIR code system URL to OMOP vocabulary_id",
+  "status": "active",
+  "group": [{
+    "source": "http://hl7.org/fhir/ValueSet/uri",
+    "target": "https://example.org/aof/CodeSystem/omop-vocabulary-id",
+    "element": [
+      {"code": "http://snomed.info/sct",                    "target": [{"code": "SNOMED",  "equivalence": "equivalent"}]},
+      {"code": "http://hl7.org/fhir/sid/icd-10",            "target": [{"code": "ICD10",   "equivalence": "equivalent"}]},
+      {"code": "http://fhir.de/CodeSystem/bfarm/icd-10-gm", "target": [{"code": "ICD10GM", "equivalence": "equivalent"}]},
+      {"code": "http://loinc.org",                          "target": [{"code": "LOINC",   "equivalence": "equivalent"}]}
+    ]
+  }]
+}

@@ -1,0 +1,16 @@
+{
+  "resourceType": "ConceptMap",
+  "id": "gender-to-omop",
+  "url": "https://example.org/aof/ConceptMap/gender-to-omop",
+  "name": "GenderToOmop",
+  "title": "FHIR administrative gender to OMOP gender concept_id",
+  "status": "active",
+  "group": [{
+    "source": "http://hl7.org/fhir/administrative-gender",
+    "target": "https://example.org/aof/CodeSystem/omop-concept-id",
+    "element": [
+      {"code": "female", "target": [{"code": "8532", "display": "FEMALE", "equivalence": "equivalent"}]},
+      {"code": "male",   "target": [{"code": "8507", "display": "MALE",   "equivalence": "equivalent"}]}
+    ]
+  }]
+}

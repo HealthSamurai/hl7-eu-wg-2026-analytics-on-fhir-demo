@@ -1,0 +1,25 @@
+{
+  "resourceType": "AidboxMaterialization",
+  "id": "visits",
+  "meta": {
+    "profile": [
+      "http://health-samurai.io/fhir/core/StructureDefinition/aidboxmaterialization-pgProfile"
+    ]
+  },
+  "type": "ViewDefinition",
+  "target": "https://example.org/aof/ViewDefinition/visits",
+  "parameter": [
+    {
+      "name": "schema",
+      "valueString": "sof"
+    },
+    {
+      "name": "name",
+      "valueString": "visits"
+    },
+    {
+      "name": "materializationType",
+      "valueCode": "view"
+    }
+  ]
+}
