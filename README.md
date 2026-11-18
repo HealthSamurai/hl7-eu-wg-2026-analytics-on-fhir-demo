@@ -26,6 +26,7 @@ Agenda and links for the session: <https://www.health-samurai.io/go/af4na2>
 - [Demo 2. SQLView, SQLQuery and terminology](#demo-2-sqlview-sqlquery-and-terminology)
 - [Demo 3. OMOP mapping in SQLViews](#demo-3-omop-mapping-in-sqlviews)
 - [Demo 4. Secondary-use rules as views](#demo-4-secondary-use-rules-as-views)
+- [The whole demo as one FHIR package](#the-whole-demo-as-one-fhir-package)
 - [Start over](#start-over)
 - [Things to know](#things-to-know)
 - [Links](#links)
@@ -55,6 +56,7 @@ Tested with Aidbox `edge`, build `791d207dcc` (17 November 2026).
 | `03-omop/`               | demo 3: OMOP vocabulary subset, ConceptMaps, mapping views, OMOP tables, reports          |
 | `04-ehds/`               | demo 4: opt-outs, a minimised research extract, an aggregate answer                       |
 | `build.py`               | packs a stage directory into one FHIR transaction bundle (`build/<stage>.json`)           |
+| `package.py`             | packs every artifact of the demo into one FHIR package (`build/*.tgz`)                    |
 | `load.sh`                | loads the demo, one directory at a time                                                   |
 | `query.sh`               | runs a ViewDefinition, a Library or plain SQL and prints CSV; `-v` also shows the request |
 | `reset.sh`               | empties the server, keeps the license                                                     |
@@ -496,6 +498,51 @@ What this demo does not do: the pseudonym is an `md5` hash with the salt written
 of 5 is arbitrary, and a `Consent` resource is one possible way to record an opt-out, not an agreed one.
 Real pseudonymisation, disclosure control and the legal process are outside its scope.
 
+## The whole demo as one FHIR package
+
+Everything the four demos load, apart from the data, is 34 FHIR resources: 5 ViewDefinitions, 16 SQLViews,
+9 SQLQueries, 1 ValueSet and 3 ConceptMaps. `package.py` packs them into one FHIR package, the same format
+implementation guides are published in.
+
+```sh
+python3 package.py
+# build/org.example.analytics-on-fhir-0.1.0.tgz: 34 resources
+```
+
+To see that the package alone is enough, install it on a server that holds only the data:
+
+```sh
+./reset.sh && ./load.sh 00-population/
+
+SECRET=$(sed -n 's/.*BOX_ROOT_CLIENT_SECRET: *//p' aidbox/docker-compose.yaml)
+curl -u "root:$SECRET" -X POST 'http://localhost:8080/fhir/$upload-fhir-npm-packages' \
+  -F 'package.tgz=@build/org.example.analytics-on-fhir-0.1.0.tgz;type=application/gzip'
+```
+
+Aidbox gives the resources of a package new ids, so find one by its canonical URL and run it:
+
+```sh
+ID=$(curl -s -u "root:$SECRET" \
+  'http://localhost:8080/fhir/Library?url=https://example.org/aof/Library/summary&_elements=id' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["entry"][0]["resource"]["id"])')
+./query.sh Library/$ID
+```
+
+It prints the same summary as [demo 2](#demo-2-sqlview-sqlquery-and-terminology): 145 people with diabetes, 29 of
+them need a follow-up. The OMOP queries also need the vocabulary tables, which are data and not part of the
+package: load `03-omop/vocabulary.sql` first.
+
+Remove the package before going back to the step-by-step demos, otherwise every artifact exists twice:
+
+```sh
+curl -u "root:$SECRET" -X POST 'http://localhost:8080/fhir/$fhir-package-uninstall' \
+  -H 'content-type: application/json' \
+  -d '{"resourceType":"Parameters","parameter":[{"name":"package","valueString":"org.example.analytics-on-fhir@0.1.0"}]}'
+./reset.sh && ./load.sh all
+```
+
+Tested on Aidbox only. `$upload-fhir-npm-packages` and `$fhir-package-uninstall` are Aidbox operations.
+
 ## Start over
 
 ```sh
@@ -511,8 +558,10 @@ cd aidbox && docker compose down -v
 
 ## Things to know
 
-- **The OMOP vocabulary here is not real.** `03-omop/vocabulary.sql` marks every row as `[athena]`,
-  `[unverified]` or `[placeholder]`. Placeholder ids start at 2,000,000,000 and are not OMOP concept ids.
+- **The OMOP vocabulary here is a hand-made subset.** `03-omop/vocabulary.sql` marks every row as `[athena]`,
+  `[webapi]` (checked against the public OHDSI WebAPI) or `[placeholder]`. The three placeholder ids, for the
+  ICD-10-GM codes, start at 2,000,000,000 and are not OMOP concept ids. The "Maps to" rows are simplified: every
+  diabetes code maps straight to 201826, while Athena maps some of them to more specific concepts.
   Use Athena (<https://athena.ohdsi.org>) for real work.
 - **The OMOP ids are row numbers.** `person_id` and the other keys are `row_number()` over the source id:
   stable for this dataset, not a general solution.
@@ -522,14 +571,17 @@ cd aidbox && docker compose down -v
 - **An empty response with HTTP 200 means a SQL error.** `$run` and `$sqlquery-run` stream the result;
   look at `docker compose logs postgres` in `aidbox/`.
 - **`$run` returns 100 rows by default.** Pass `_limit`, as `query.sh ViewDefinition/<id> <limit>` does.
-- **Operation names.** `$run` on ViewDefinition and `$sqlquery-run` on Library are the names in this Aidbox build;
-  the SQL on FHIR 3.0 ballot names differ.
+- **Operation names.** `$run` on ViewDefinition and `$sqlquery-run` on Library are the names in this Aidbox build.
+  SQL on FHIR version 3 defines one system-level operation for both, `$sql-run`, and `$sql-export` for bulk export.
 - **Materialization is Aidbox, not SQL on FHIR.** Demo 1, step 5 uses the `AidboxMaterialization` resource and
   its `$materialize` operation. Nothing after that step depends on it: the Libraries read the ViewDefinitions,
   not the `sof` views.
 - **Demo 4 illustrates ideas, not EHDS requirements.** The opt-out as a `Consent`, the pseudonym and the
-  small-cell threshold are modelling choices made for this demo.
-- **The data is synthetic.** The ICD-10-GM codes and the post-coordinated expression are illustrative.
+  small-cell threshold are modelling choices made for this demo. The EHDS Regulation (EU) 2025/327 gives the
+  right to opt out of secondary use (Article 71) and asks for anonymised or pseudonymised data (Article 66);
+  it sets no minimum cell size.
+- **The data is synthetic.** The ICD-10-GM codes are illustrative. The post-coordinated SNOMED CT expression on
+  Maria's Condition is valid: it was checked with `$validate-code` on tx.fhir.org.
 
 ## Links
 
