@@ -32,28 +32,30 @@ load_views() {
   python3 build.py 01-1-view-definitions
   post build/01-1-view-definitions.json /fhir
 }
-load_materialize() {
+materialize() {  # materialize <AidboxMaterialization file>: create the resource, run $materialize, wait for it
   # Aidbox, not SQL on FHIR: AidboxMaterialization says where a view lives in the database;
   # $materialize on it (async only) builds it
-  python3 build.py 01-2-materialize
-  post build/01-2-materialize.json /fhir
+  local f=$1 id name status code
+  id=$(sed -n 's/.*"id": *"\([^"]*\)".*/\1/p' "$f" | head -1)
+  name=$(basename "$f" .json)
+  code=$(curl -s -o /tmp/aof-load.out -w '%{http_code}' -u "root:$SECRET" -X PUT "$AIDBOX/fhir/AidboxMaterialization/$id" -H "$JSON" -d @"$f")
+  if [ "${code:0:1}" != 2 ]; then echo "FAILED $f -> HTTP $code"; head -c 600 /tmp/aof-load.out; echo; exit 1; fi
   echo '{"resourceType":"Parameters","parameter":[]}' > /tmp/aof-params.json
-  for f in 01-2-materialize/*.json; do
-    local id status code
-    id=$(basename "$f" .json)
-    status=$(curl -s -o /dev/null -D - -u "root:$SECRET" -X POST "$AIDBOX/fhir/AidboxMaterialization/$id/\$materialize" \
-      -H "$JSON" -H 'Prefer: respond-async' -d @/tmp/aof-params.json | sed -n 's/^[Cc]ontent-[Ll]ocation: *//p' | tr -d '\r')
-    if [ -z "$status" ]; then echo "FAILED to start \$materialize for $id"; exit 1; fi
-    for _ in $(seq 1 60); do
-      code=$(curl -s -o /tmp/aof-load.out -w '%{http_code}' -u "root:$SECRET" "$AIDBOX$status")
-      [ "$code" = 202 ] || break
-      sleep 0.5
-    done
-    if [ "$code" != 200 ] || ! grep -q 'completed successfully' /tmp/aof-load.out; then
-      echo "FAILED \$materialize for $id -> HTTP $code"; head -c 600 /tmp/aof-load.out; echo; exit 1
-    fi
-    echo "sof.$id"
+  status=$(curl -s -o /dev/null -D - -u "root:$SECRET" -X POST "$AIDBOX/fhir/AidboxMaterialization/$id/\$materialize" \
+    -H "$JSON" -H 'Prefer: respond-async' -d @/tmp/aof-params.json | sed -n 's/^[Cc]ontent-[Ll]ocation: *//p' | tr -d '\r')
+  if [ -z "$status" ]; then echo "FAILED to start \$materialize for $id"; exit 1; fi
+  for _ in $(seq 1 60); do
+    code=$(curl -s -o /tmp/aof-load.out -w '%{http_code}' -u "root:$SECRET" "$AIDBOX$status")
+    [ "$code" = 202 ] || break
+    sleep 0.5
   done
+  if [ "$code" != 200 ] || ! grep -q 'completed successfully' /tmp/aof-load.out; then
+    echo "FAILED \$materialize for $id -> HTTP $code"; head -c 600 /tmp/aof-load.out; echo; exit 1
+  fi
+  echo "sof.$name"
+}
+load_materialize() {
+  for f in 01-2-materialize/*.json; do materialize "$f"; done
 }
 psql() {  # psql <file.sql>: run a SQL script in the Aidbox database
   python3 -c 'import json,sys; print(json.dumps({"query": open(sys.argv[1]).read()}))' "$1" > /tmp/aof-sql.json
@@ -64,6 +66,7 @@ psql() {  # psql <file.sql>: run a SQL script in the Aidbox database
 load_cohort() {
   python3 build.py 02-cohort
   post build/02-cohort.json /fhir
+  materialize 02-cohort/materialize/vs_diabetes.json  # the value set as a database view, through a SQLView
   run dq-summary
   run summary
 }

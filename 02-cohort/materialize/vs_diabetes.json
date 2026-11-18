@@ -1,0 +1,25 @@
+{
+  "resourceType": "AidboxMaterialization",
+  "id": "vs-diabetes",
+  "meta": {
+    "profile": [
+      "http://health-samurai.io/fhir/core/StructureDefinition/aidboxmaterialization-pgProfile"
+    ]
+  },
+  "type": "Library",
+  "target": "https://example.org/aof/Library/diabetes-codes",
+  "parameter": [
+    {
+      "name": "schema",
+      "valueString": "sof"
+    },
+    {
+      "name": "name",
+      "valueString": "vs_diabetes"
+    },
+    {
+      "name": "materializationType",
+      "valueCode": "view"
+    }
+  ]
+}

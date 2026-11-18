@@ -53,6 +53,7 @@ Tested with Aidbox `edge`, build `791d207dcc` (17 November 2026).
 | `01-1-view-definitions/` | demo 1: four ViewDefinitions                                        |
 | `01-2-materialize/`      | demo 1: one AidboxMaterialization per view (Aidbox, not the spec)   |
 | `02-cohort/`             | demo 2: ValueSet, data quality checks, cohort, follow-up queries    |
+| `02-cohort/materialize/` | demo 2: the value set as a database view (Aidbox, not the spec)     |
 | `03-omop/`               | demo 3: OMOP vocabulary subset, ConceptMaps, mapping views, reports |
 | `04-ehds/`               | demo 4: opt-outs, a minimised research extract, an aggregate answer |
 | `build.py`               | packs a stage directory into one bundle (`build/<stage>.json`)      |
@@ -63,7 +64,7 @@ Tested with Aidbox `edge`, build `791d207dcc` (17 November 2026).
 | `aidbox/`                | your Aidbox compose file (not in git, see [Setup](#setup))          |
 
 Everything the demos load, apart from the OMOP vocabulary tables and the Aidbox materializations, is a FHIR
-resource with a canonical URL: 5 ViewDefinitions, 16 SQLViews, 11 SQLQueries, a ValueSet and 3 ConceptMaps.
+resource with a canonical URL: 5 ViewDefinitions, 17 SQLViews, 10 SQLQueries, a ValueSet and 3 ConceptMaps.
 The whole pipeline could therefore be packed into one FHIR package and installed on any FHIR server that
 supports SQL on FHIR. This repository does not build such a package yet.
 
@@ -294,30 +295,33 @@ a ValueSet is just another table to join.
    | unit-not-ucum       | conformance  | 6        |
 
 3. Who has diabetes? First, look at the ValueSet `diabetes` the way SQL sees it: a table of codes.
-   The query `diabetes-codes` names the ValueSet as a dependency and selects from it by its label.
+   `diabetes-codes` is a SQLView that names the ValueSet as a dependency and selects from it by its label.
+   `load.sh` also keeps that view in the database as `sof.vs_diabetes`, so plain SQL works:
 
    ```sh
-   ./query.sh Library/diabetes-codes
+   ./query.sh sql "select system, code from sof.vs_diabetes order by 1, 2"
    ```
 
-   In the UI: open <http://localhost:8080/u/analytics/queries/edit/diabetes-codes> and press **Run**.
+   In the UI: open the DB console at <http://localhost:8080/u/db-console> and run the same query, or open
+   <http://localhost:8080/u/analytics/sqlview/edit/diabetes-codes> and press **Run**.
 
    Expected:
 
    ```
-   "system","code","display"
-   "http://clinic-3.example/codes","DM2","Diabète type 2 (local)"
-   "http://fhir.de/CodeSystem/bfarm/icd-10-gm","E11.20",""
-   "http://fhir.de/CodeSystem/bfarm/icd-10-gm","E11.90",""
-   "http://fhir.de/CodeSystem/bfarm/icd-10-gm","E11.91",""
-   "http://hl7.org/fhir/sid/icd-10","E11.22",""
-   "http://hl7.org/fhir/sid/icd-10","E11.65",""
-   "http://hl7.org/fhir/sid/icd-10","E11.9",""
-   "http://snomed.info/sct","44054006","Diabetes mellitus type 2"
-   "http://snomed.info/sct","73211009","Diabetes mellitus"
+   system,code
+   http://clinic-3.example/codes,DM2
+   http://fhir.de/CodeSystem/bfarm/icd-10-gm,E11.20
+   http://fhir.de/CodeSystem/bfarm/icd-10-gm,E11.90
+   http://fhir.de/CodeSystem/bfarm/icd-10-gm,E11.91
+   http://hl7.org/fhir/sid/icd-10,E11.22
+   http://hl7.org/fhir/sid/icd-10,E11.65
+   http://hl7.org/fhir/sid/icd-10,E11.9
+   http://snomed.info/sct,44054006
+   http://snomed.info/sct,73211009
    ```
 
-   The table also has the columns `version` and `inactive`.
+   This Aidbox build cannot materialize a ValueSet directly, only a ViewDefinition or a SQLView, which is why
+   the value set goes through a SQLView. As in demo 1, materialization is an Aidbox feature, not SQL on FHIR.
 
    Now the cohort. Look at `02-cohort/diabetes-cohort.sql`: the same ValueSet is a dependency
    and is joined on `system` and `code`. Three clinics, three coding habits, one join.
@@ -562,8 +566,8 @@ Real pseudonymisation, disclosure control and the legal process are outside its 
 
 ## The whole demo as one FHIR package
 
-Everything the four demos load, apart from the data, is 36 FHIR resources: 5 ViewDefinitions, 16 SQLViews,
-11 SQLQueries, 1 ValueSet and 3 ConceptMaps. `package.py` packs them into one FHIR package, the same format
+Everything the four demos load, apart from the data, is 36 FHIR resources: 5 ViewDefinitions, 17 SQLViews,
+10 SQLQueries, 1 ValueSet and 3 ConceptMaps. `package.py` packs them into one FHIR package, the same format
 implementation guides are published in.
 
 ```sh
