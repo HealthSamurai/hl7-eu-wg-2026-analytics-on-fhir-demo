@@ -117,3 +117,15 @@ for p in [r for r in adults if r["managingOrganization"]["reference"]=="Organiza
         "code":{"coding":[{"system":"http://clinic-2.example/codes","code":"HTA","display":"Hypertension (local)"}]},"onsetDateTime":"2023-06-01T09:00:00Z"})
 json.dump({"resourceType":"Bundle","type":"transaction","entry":[{"resource":r,"request":{"method":"PUT","url":f"{r['resourceType']}/{r['id']}"}} for r in extra]},open("bundle-99-extra.json","w"))
 print("extra", len(extra))
+
+# ---- opt-outs from secondary use: every 7th person with diabetes (illustration for 04-ehds; no random calls) ----
+diabetics=sorted(r["subject"]["reference"].split("/")[1] for r in res if r["resourceType"]=="Condition" and r["id"].endswith("-dm"))
+consents=[{"resourceType":"Consent","id":f"{pid}-optout","status":"active",
+    "scope":{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/consentscope","code":"research"}]},
+    "category":[{"coding":[{"system":"http://terminology.hl7.org/CodeSystem/consentcategorycodes","code":"research"}]}],
+    "patient":{"reference":f"Patient/{pid}"},"dateTime":"2026-03-01T09:00:00Z",
+    "policyRule":{"text":"Opt-out from secondary use of health data (illustration)"},
+    "provision":{"type":"deny","purpose":[{"system":"http://terminology.hl7.org/CodeSystem/v3-ActReason","code":"HRESCH"}]}}
+  for pid in diabetics[3::7]]
+json.dump({"resourceType":"Bundle","type":"transaction","entry":[{"resource":r,"request":{"method":"PUT","url":f"{r['resourceType']}/{r['id']}"}} for r in consents]},open("bundle-98-consent.json","w"))
+print("consents", len(consents))

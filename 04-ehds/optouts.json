@@ -1,0 +1,23 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "optouts",
+  "url": "https://example.org/aof/ViewDefinition/optouts",
+  "name": "optouts",
+  "title": "People who opted out of secondary use",
+  "status": "active",
+  "resource": "Consent",
+  "select": [
+    {
+      "column": [
+        { "name": "consent_id", "path": "getResourceKey()" },
+        { "name": "patient_id", "path": "patient.getReferenceKey(Patient)" },
+        { "name": "recorded", "path": "dateTime", "type": "dateTime" }
+      ]
+    }
+  ],
+  "where": [
+    { "path": "status = 'active'" },
+    { "path": "provision.type = 'deny'" },
+    { "path": "scope.coding.where(code = 'research').exists()" }
+  ]
+}

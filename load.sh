@@ -5,6 +5,7 @@
 #   ./load.sh 01-2-materialize/      demo 1: the views as database views in the schema sof (Aidbox feature)
 #   ./load.sh 02-cohort/             demo 2: ValueSet, data quality checks, cohort, follow-up queries
 #   ./load.sh 03-omop/               demo 3: OMOP vocabulary subset, ConceptMaps, mapping and OMOP views
+#   ./load.sh 04-ehds/               demo 4: opt-outs, a minimised research extract, an aggregate answer
 #   ./load.sh all                    everything, in this order
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -25,7 +26,7 @@ run() {  # run <library id>
 
 load_population() {
   for f in 00-population/bundle-*.json; do post "$f" /fhir; echo "loaded $f"; done
-  for t in Patient Organization Encounter Condition Observation; do echo "$t: $(count $t)"; done
+  for t in Patient Organization Encounter Condition Observation Consent; do echo "$t: $(count $t)"; done
 }
 load_views() {
   python3 build.py 01-1-view-definitions
@@ -75,6 +76,12 @@ load_omop() {
   run omop-follow-up
 }
 
+load_ehds() {
+  python3 build.py 04-ehds
+  post build/04-ehds.json /fhir
+  run primary-vs-secondary
+}
+
 arg=${1:-}
 case "${arg%/}" in
   00-population)         load_population ;;
@@ -82,6 +89,7 @@ case "${arg%/}" in
   01-2-materialize)      load_materialize ;;
   02-cohort)             load_cohort ;;
   03-omop)               load_omop ;;
-  all) load_population; load_views; load_materialize; load_cohort; load_omop ;;
-  *) sed -n '2,8p' "$0"; exit 1 ;;
+  04-ehds)               load_ehds ;;
+  all) load_population; load_views; load_materialize; load_cohort; load_omop; load_ehds ;;
+  *) sed -n '2,9p' "$0"; exit 1 ;;
 esac

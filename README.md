@@ -1,7 +1,7 @@
 # Analytics on FHIR: SQL on FHIR demo
 
-Three hands-on demos that take production-like FHIR data to flat tables, to a cohort and a call list,
-and finally to an OMOP dataset for secondary use. Everything is a FHIR resource (ViewDefinition, Library,
+Four hands-on demos that take production-like FHIR data to flat tables, to a cohort and a call list,
+to an OMOP dataset, and finally to an extract that follows the rules of secondary use. Everything is a FHIR resource (ViewDefinition, Library,
 ValueSet, ConceptMap) loaded into a FHIR server and executed with the SQL on FHIR operations.
 
 ## About the session
@@ -22,9 +22,10 @@ Agenda and links for the session: <https://www.health-samurai.io/go/af4na2>
 - [Requirements](#requirements)
 - [Repository layout](#repository-layout)
 - [Setup](#setup)
-- [Demo 1. FHIR to tables](#demo-1-fhir-to-tables)
-- [Demo 2. Quality checks, terminology, cohort](#demo-2-quality-checks-terminology-cohort)
-- [Demo 3. FHIR to OMOP](#demo-3-fhir-to-omop)
+- [Demo 1. ViewDefinition in action](#demo-1-viewdefinition-in-action)
+- [Demo 2. SQLView, SQLQuery and terminology](#demo-2-sqlview-sqlquery-and-terminology)
+- [Demo 3. OMOP mapping in SQLViews](#demo-3-omop-mapping-in-sqlviews)
+- [Demo 4. Secondary-use rules as views](#demo-4-secondary-use-rules-as-views)
 - [Start over](#start-over)
 - [Things to know](#things-to-know)
 - [Links](#links)
@@ -52,11 +53,17 @@ Tested with Aidbox `edge`, build `791d207dcc` (17 November 2026).
 | `01-2-materialize/`      | demo 1: one AidboxMaterialization resource per view (an Aidbox feature, not SQL on FHIR)  |
 | `02-cohort/`             | demo 2: ValueSet, data quality checks, cohort, follow-up queries                          |
 | `03-omop/`               | demo 3: OMOP vocabulary subset, ConceptMaps, mapping views, OMOP tables, reports          |
+| `04-ehds/`               | demo 4: opt-outs, a minimised research extract, an aggregate answer                       |
 | `build.py`               | packs a stage directory into one FHIR transaction bundle (`build/<stage>.json`)           |
 | `load.sh`                | loads the demo, one directory at a time                                                   |
 | `query.sh`               | runs a ViewDefinition, a Library or plain SQL and prints CSV; `-v` also shows the request |
 | `reset.sh`               | empties the server, keeps the license                                                     |
 | `aidbox/`                | your local Aidbox compose file (not in git, created in [Setup](#setup))                   |
+
+Everything the demos load, apart from the OMOP vocabulary tables and the Aidbox materializations, is a FHIR
+resource with a canonical URL: 5 ViewDefinitions, 16 SQLViews, 9 SQLQueries, a ValueSet and 3 ConceptMaps.
+The whole pipeline could therefore be packed into one FHIR package and installed on any FHIR server that
+supports SQL on FHIR. This repository does not build such a package yet.
 
 Every SQLView and SQLQuery is one `.sql` file. Its header comments carry the Library metadata:
 
@@ -89,6 +96,7 @@ On top of that:
 - 6 lab results without a UCUM unit code
 - 54 social findings recorded as Conditions ("Full-time employment", "Stress")
 - 5 hypertension diagnoses with a local code that nothing maps
+- 31 people with diabetes who opted out of secondary use, recorded as `Consent` resources
 
 ## Setup
 
@@ -141,7 +149,9 @@ On top of that:
 
 To log in to the Aidbox UI use `admin` and the value of `BOX_ADMIN_PASSWORD` from `aidbox/docker-compose.yaml`.
 
-## Demo 1. FHIR to tables
+## Demo 1. ViewDefinition in action
+
+*`forEach`, `%rowIndex`, `$run` and materialization.*
 
 Goal: turn nested FHIR resources into flat tables with ViewDefinitions.
 
@@ -153,7 +163,7 @@ Goal: turn nested FHIR resources into flat tables with ViewDefinitions.
 
    In the UI: browse the loaded patients at <http://localhost:8080/u/resource/Patient>.
 
-   Expected: `Patient: 1201`, `Organization: 3`, `Encounter: 2265`, `Condition: 277`, `Observation: 862`.
+   Expected: `Patient: 1201`, `Organization: 3`, `Encounter: 2265`, `Condition: 277`, `Observation: 862`, `Consent: 31`.
 
 2. Look at Maria's diagnosis as the clinic stores it. In the UI: open
    <http://localhost:8080/u/resource/Condition/edit/p-0101-t2d> and find `code.coding`.
@@ -228,7 +238,9 @@ Goal: turn nested FHIR resources into flat tables with ViewDefinitions.
 
    Row counts: `sof.patients` 1,201 · `sof.conditions` 403 · `sof.visits` 2,265 · `sof.lab_results` 710.
 
-## Demo 2. Quality checks, terminology, cohort
+## Demo 2. SQLView, SQLQuery and terminology
+
+*Quality checks, a ValueSet join, a cohort, a worklist.*
 
 Goal: build layers on top of the flat tables. SQLViews reshape, SQLQueries answer a question,
 a ValueSet is just another table to join.
@@ -295,7 +307,9 @@ All views and queries of the demo are listed at <http://localhost:8080/u/analyti
 The measure is a simplified version of CMS122 ("Glycemic Status Assessment Greater Than 9%"):
 no exclusions, HbA1c by LOINC 4548-4 only.
 
-## Demo 3. FHIR to OMOP
+## Demo 3. OMOP mapping in SQLViews
+
+*"Maps to" joins, a ConceptMap, domain routing.*
 
 Goal: produce OMOP CDM tables from the same views, and see what a naive conversion silently loses.
 
@@ -408,6 +422,80 @@ Goal: produce OMOP CDM tables from the same views, and see what a naive conversi
    | clinic-3 | 26        | 6               |
    | ALL      | 145       | 29              |
 
+## Demo 4. Secondary-use rules as views
+
+*`Consent` opt-out, a pseudonymised extract, small-cell suppression.*
+
+Goal: show that the rules which separate secondary use from care can be written as the same kind of artifact.
+The European Health Data Space is the reason this matters in Europe, but nothing here is an official EHDS
+format: it is an illustration of three ideas with plain FHIR resources and SQL.
+
+1. Load the artifacts.
+
+   ```sh
+   ./load.sh 04-ehds/
+   ```
+
+2. Opt-out. 31 people recorded that their data must not be used for research. Each is a FHIR `Consent`
+   resource; the ViewDefinition `optouts` turns them into a table.
+
+   ```sh
+   ./query.sh ViewDefinition/optouts 5
+   ./query.sh Library/primary-vs-secondary
+   ```
+
+   Expected:
+
+   | clinic   | care_cohort | care_call_list | opted_out | research_cohort |
+   |----------|-------------|----------------|-----------|-----------------|
+   | clinic-1 | 72          | 13             | 13        | 59              |
+   | clinic-2 | 47          | 10             | 6         | 41              |
+   | clinic-3 | 26          | 6              | 3         | 23              |
+   | ALL      | 145         | 29             | 22        | 123             |
+
+   The call list still has 29 people: an opt-out from research does not remove anyone from care.
+   The research cohort has 123.
+
+   In the UI: open <http://localhost:8080/u/analytics/queries/edit/primary-vs-secondary> and press **Run**.
+
+3. A minimised extract. `permit-person` and `permit-hba1c` are what a study on glycaemic control would
+   receive: no opt-outs, a pseudonym instead of the patient id, year of birth instead of the date,
+   month of the test instead of the day, and no other columns.
+
+   ```sh
+   ./query.sh Library/permit-person | head -4
+   ./query.sh Library/permit-hba1c  | head -4
+   ```
+
+   Row counts: 1,170 people (1,201 minus 31 opt-outs), 422 HbA1c results.
+
+   In the UI: open <http://localhost:8080/u/analytics/sqlview/edit/permit-person>, read the SQL,
+   and press **Run**. What leaves the organisation is a view someone can review and approve.
+
+4. An aggregate answer. Some questions need no patient-level data at all. `data-request` returns counts
+   by clinic and sex, and replaces any count below 5 with `<5`.
+
+   ```sh
+   ./query.sh Library/data-request
+   ```
+
+   Expected:
+
+   | clinic_id | gender | diabetics | needs_follow_up |
+   |-----------|--------|-----------|-----------------|
+   | clinic-1  | female | 31        | 8               |
+   | clinic-1  | male   | 28        | <5              |
+   | clinic-2  | female | 23        | 5               |
+   | clinic-2  | male   | 18        | <5              |
+   | clinic-3  | female | 12        | <5              |
+   | clinic-3  | male   | 11        | <5              |
+
+   In the UI: open <http://localhost:8080/u/analytics/queries/edit/data-request> and press **Run**.
+
+What this demo does not do: the pseudonym is an `md5` hash with the salt written in the SQL, the threshold
+of 5 is arbitrary, and a `Consent` resource is one possible way to record an opt-out, not an agreed one.
+Real pseudonymisation, disclosure control and the legal process are outside its scope.
+
 ## Start over
 
 ```sh
@@ -439,6 +527,8 @@ cd aidbox && docker compose down -v
 - **Materialization is Aidbox, not SQL on FHIR.** Demo 1, step 5 uses the `AidboxMaterialization` resource and
   its `$materialize` operation. Nothing after that step depends on it: the Libraries read the ViewDefinitions,
   not the `sof` views.
+- **Demo 4 illustrates ideas, not EHDS requirements.** The opt-out as a `Consent`, the pseudonym and the
+  small-cell threshold are modelling choices made for this demo.
 - **The data is synthetic.** The ICD-10-GM codes and the post-coordinated expression are illustrative.
 
 ## Links
