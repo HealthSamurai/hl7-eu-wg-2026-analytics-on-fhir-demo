@@ -47,23 +47,23 @@ Tested with Aidbox `edge`, build `791d207dcc` (17 November 2026).
 
 ## Repository layout
 
-| Path                     | What                                                                                      |
-|--------------------------|-------------------------------------------------------------------------------------------|
-| `00-population/`         | synthetic population: `gen.py` (seed 2026) and the generated transaction bundles          |
-| `01-1-view-definitions/` | demo 1: four ViewDefinitions                                                              |
-| `01-2-materialize/`      | demo 1: one AidboxMaterialization resource per view (an Aidbox feature, not SQL on FHIR)  |
-| `02-cohort/`             | demo 2: ValueSet, data quality checks, cohort, follow-up queries                          |
-| `03-omop/`               | demo 3: OMOP vocabulary subset, ConceptMaps, mapping views, OMOP tables, reports          |
-| `04-ehds/`               | demo 4: opt-outs, a minimised research extract, an aggregate answer                       |
-| `build.py`               | packs a stage directory into one FHIR transaction bundle (`build/<stage>.json`)           |
-| `package.py`             | packs every artifact of the demo into one FHIR package (`build/*.tgz`)                    |
-| `load.sh`                | loads the demo, one directory at a time                                                   |
-| `query.sh`               | runs a ViewDefinition, a Library or plain SQL and prints CSV; `-v` also shows the request |
-| `reset.sh`               | empties the server, keeps the license                                                     |
-| `aidbox/`                | your local Aidbox compose file (not in git, created in [Setup](#setup))                   |
+| Path                     | What                                                                |
+|--------------------------|---------------------------------------------------------------------|
+| `00-population/`         | synthetic population: `gen.py` (seed 2026) and its bundles          |
+| `01-1-view-definitions/` | demo 1: four ViewDefinitions                                        |
+| `01-2-materialize/`      | demo 1: one AidboxMaterialization per view (Aidbox, not the spec)   |
+| `02-cohort/`             | demo 2: ValueSet, data quality checks, cohort, follow-up queries    |
+| `03-omop/`               | demo 3: OMOP vocabulary subset, ConceptMaps, mapping views, reports |
+| `04-ehds/`               | demo 4: opt-outs, a minimised research extract, an aggregate answer |
+| `build.py`               | packs a stage directory into one bundle (`build/<stage>.json`)      |
+| `package.py`             | packs all artifacts into one FHIR package (`build/*.tgz`)           |
+| `load.sh`                | loads the demo, one directory at a time                             |
+| `query.sh`               | runs a view, a Library or SQL, prints CSV; `-v` shows the request   |
+| `reset.sh`               | empties the server, keeps the license                               |
+| `aidbox/`                | your Aidbox compose file (not in git, see [Setup](#setup))          |
 
 Everything the demos load, apart from the OMOP vocabulary tables and the Aidbox materializations, is a FHIR
-resource with a canonical URL: 5 ViewDefinitions, 16 SQLViews, 9 SQLQueries, a ValueSet and 3 ConceptMaps.
+resource with a canonical URL: 5 ViewDefinitions, 16 SQLViews, 11 SQLQueries, a ValueSet and 3 ConceptMaps.
 The whole pipeline could therefore be packed into one FHIR package and installed on any FHIR server that
 supports SQL on FHIR. This repository does not build such a package yet.
 
@@ -79,6 +79,8 @@ select ...
 ```
 
 `depends-on: <label> <resource>` becomes `Library.relatedArtifact`; the label is the table name the SQL uses.
+A SQLQuery may also declare `param: <name> <type>`, which becomes `Library.parameter`; the SQL refers to it as `:name`.
+These comments are a convention of this repository, not part of SQL on FHIR: `build.py` turns each file into a Library.
 
 ### The data
 
@@ -240,6 +242,27 @@ Goal: turn nested FHIR resources into flat tables with ViewDefinitions.
 
    Row counts: `sof.patients` 1,201 · `sof.conditions` 403 · `sof.visits` 2,265 · `sof.lab_results` 710.
 
+   One more question the tables can now answer: how does each clinic code diabetes?
+
+   ```sh
+   ./query.sh sql "select p.clinic_id, c.system, count(*) as codings from sof.conditions c join sof.patients p using (patient_id) where c.code in ('44054006', 'DM2') or c.code like 'E11%' group by 1, 2 order by 1, 3 desc, 2"
+   ```
+
+   Expected:
+
+   ```
+   clinic_id,system,codings
+   clinic-1,http://hl7.org/fhir/sid/icd-10,73
+   clinic-1,http://snomed.info/sct,73
+   clinic-1,http://fhir.de/CodeSystem/bfarm/icd-10-gm,30
+   clinic-2,http://hl7.org/fhir/sid/icd-10,51
+   clinic-2,http://snomed.info/sct,51
+   clinic-2,http://fhir.de/CodeSystem/bfarm/icd-10-gm,18
+   clinic-3,http://clinic-3.example/codes,46
+   ```
+
+   Clinic-3 uses only its own local code. Demo 2 deals with that through a ValueSet.
+
 ## Demo 2. SQLView, SQLQuery and terminology
 
 *Quality checks, a ValueSet join, a cohort, a worklist.*
@@ -270,7 +293,33 @@ a ValueSet is just another table to join.
    | obs-before-birth    | plausibility | 3        |
    | unit-not-ucum       | conformance  | 6        |
 
-3. Who has diabetes? Look at `02-cohort/diabetes-cohort.sql`: the ValueSet `diabetes` is a dependency
+3. Who has diabetes? First, look at the ValueSet `diabetes` the way SQL sees it: a table of codes.
+   The query `diabetes-codes` names the ValueSet as a dependency and selects from it by its label.
+
+   ```sh
+   ./query.sh Library/diabetes-codes
+   ```
+
+   In the UI: open <http://localhost:8080/u/analytics/queries/edit/diabetes-codes> and press **Run**.
+
+   Expected:
+
+   ```
+   "system","code","display"
+   "http://clinic-3.example/codes","DM2","Diabète type 2 (local)"
+   "http://fhir.de/CodeSystem/bfarm/icd-10-gm","E11.20",""
+   "http://fhir.de/CodeSystem/bfarm/icd-10-gm","E11.90",""
+   "http://fhir.de/CodeSystem/bfarm/icd-10-gm","E11.91",""
+   "http://hl7.org/fhir/sid/icd-10","E11.22",""
+   "http://hl7.org/fhir/sid/icd-10","E11.65",""
+   "http://hl7.org/fhir/sid/icd-10","E11.9",""
+   "http://snomed.info/sct","44054006","Diabetes mellitus type 2"
+   "http://snomed.info/sct","73211009","Diabetes mellitus"
+   ```
+
+   The table also has the columns `version` and `inactive`.
+
+   Now the cohort. Look at `02-cohort/diabetes-cohort.sql`: the same ValueSet is a dependency
    and is joined on `system` and `code`. Three clinics, three coding habits, one join.
 
    ```sh
@@ -303,6 +352,19 @@ a ValueSet is just another table to join.
 
    The worklist has 29 rows. Maria (`p-0101`, HbA1c 10.2%) is one of them; 19 people are there
    because they had no test this year, not because their result is high.
+
+5. A query with a parameter. `cohort-by-clinic` lists the cohort of one clinic. The file declares the
+   parameter in its header (`-- param: clinic string`), which becomes `Library.parameter`, and the SQL
+   refers to it as `:clinic`. The value is passed by name:
+
+   ```sh
+   ./query.sh Library/cohort-by-clinic clinic=clinic-3 | tail -n +2 | wc -l
+   ```
+
+   Expected: `26`. The other two clinics give 72 and 47, together the 145 of the cohort.
+
+   Add `-v` to see the request: the value travels in a nested `Parameters` resource named `parameters`,
+   as the SQL on FHIR `$sql-run` operation defines it. Only a SQLQuery may take parameters; a SQLView may not.
 
 All views and queries of the demo are listed at <http://localhost:8080/u/analytics>.
 
@@ -500,13 +562,13 @@ Real pseudonymisation, disclosure control and the legal process are outside its 
 
 ## The whole demo as one FHIR package
 
-Everything the four demos load, apart from the data, is 34 FHIR resources: 5 ViewDefinitions, 16 SQLViews,
-9 SQLQueries, 1 ValueSet and 3 ConceptMaps. `package.py` packs them into one FHIR package, the same format
+Everything the four demos load, apart from the data, is 36 FHIR resources: 5 ViewDefinitions, 16 SQLViews,
+11 SQLQueries, 1 ValueSet and 3 ConceptMaps. `package.py` packs them into one FHIR package, the same format
 implementation guides are published in.
 
 ```sh
 python3 package.py
-# build/org.example.analytics-on-fhir-0.1.0.tgz: 34 resources
+# build/org.example.analytics-on-fhir-0.1.0.tgz: 36 resources
 ```
 
 To see that the package alone is enough, install it on a server that holds only the data:

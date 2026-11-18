@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run something on Aidbox and print the result as CSV.
 #   ./query.sh ViewDefinition/<id> [limit]   run a ViewDefinition ($run), 10 rows by default
-#   ./query.sh Library/<id>                  run a SQLView or SQLQuery ($sqlquery-run)
+#   ./query.sh Library/<id> [name=value ...] run a SQLView or SQLQuery ($sqlquery-run), with parameters if any
 #   ./query.sh sql "<select ...>"            run plain SQL in the Aidbox database
 #   ./query.sh -v | --verbose ...            also print the request, ready to paste into the Aidbox REST console
 #   ./query.sh -n | --dry-run ...            print the request and do not run it
@@ -39,7 +39,14 @@ case "${1:-}" in
     BODY=$(params _format valueCode '"csv"' _limit valueInteger "${2:-10}") ;;
   Library/*)
     URL="/fhir/$1/\$sqlquery-run"
-    BODY=$(params _format valueCode '"csv"') ;;
+    BODY=$(python3 -c '
+import json, sys
+body = {"resourceType": "Parameters", "parameter": [{"name": "_format", "valueCode": "csv"}]}
+values = [a.split("=", 1) for a in sys.argv[1:] if "=" in a]
+if values:  # query parameters travel as a nested Parameters resource, bound by name
+    body["parameter"].append({"name": "parameters", "resource": {
+        "resourceType": "Parameters", "parameter": [{"name": k, "valueString": v} for k, v in values]}})
+print(json.dumps(body, indent=2))' "${@:2}") ;;
   sql)
     URL='/$psql'
     BODY=$(python3 -c 'import json,sys; print(json.dumps({"query": sys.argv[1]}, indent=2))' "$2") ;;

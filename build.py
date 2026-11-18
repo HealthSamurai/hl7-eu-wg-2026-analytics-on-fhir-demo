@@ -4,6 +4,7 @@ SQL header:
     -- id: diabetes-cohort
     -- title: Adults 18-75 with diabetes and a visit in 2026
     -- type: sql-view | sql-query
+    -- param: <name> <type>                    (repeatable, sql-query only)
     -- depends-on: <label> <ResourceType/id>      (repeatable)
 """
 import base64
@@ -18,13 +19,16 @@ PROFILE = {"sql-view": "SQLView", "sql-query": "SQLQuery"}
 
 
 def library(path):
-    meta, deps, body = {}, [], []
+    meta, deps, params, body = {}, [], [], []
     for line in open(path, encoding="utf-8").read().split("\n"):
         if not body and line.startswith("-- ") and ":" in line:
             key, value = line[3:].split(":", 1)
             if key == "depends-on":
                 label, ref = value.split()
                 deps.append({"type": "depends-on", "label": label, "resource": f"{BASE}/{ref}"})
+            elif key == "param":
+                name, kind = value.split()
+                params.append({"name": name, "type": kind, "use": "in"})
             else:
                 meta[key] = value.strip()
         else:
@@ -32,7 +36,7 @@ def library(path):
     if "id" not in meta:  # a plain SQL script (e.g. vocabulary.sql), not a Library
         return None
     sql = "\n".join(body).strip() + "\n"
-    return {
+    res = {
         "resourceType": "Library", "id": meta["id"], "url": f"{BASE}/Library/{meta['id']}",
         "name": meta["id"].replace("-", "_"), "title": meta["title"], "status": "active",
         "meta": {"profile": [f"{SOF}/StructureDefinition/{PROFILE[meta['type']]}"]},
@@ -40,6 +44,9 @@ def library(path):
         "relatedArtifact": deps,
         "content": [{"contentType": "application/sql", "data": base64.b64encode(sql.encode()).decode()}],
     }
+    if params:
+        res["parameter"] = params
+    return res
 
 
 def main(stage):
