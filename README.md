@@ -30,6 +30,7 @@ agenda and links: <https://www.health-samurai.io/go/af4na2>
 |--------------------------------|----------------------------------------------------------|
 | Docker with Compose v2         | runs Aidbox and PostgreSQL                               |
 | A free Aidbox account          | the license is activated in the browser on first start   |
+| `git`                          | clones this repository                                   |
 | `bash`, `curl`                 | the helper scripts                                       |
 | Python 3.8 or newer            | packs SQL files into FHIR bundles; standard library only |
 | Port 8080 free, about 2 GB RAM | Aidbox listens on `localhost:8080`                       |
@@ -102,7 +103,14 @@ On top of that:
 
 ## Setup
 
-1. Start Aidbox.
+1. Clone the repository. All commands below run from its root.
+
+   ```sh
+   git clone https://github.com/HealthSamurai/hl7-eu-wg-2026-analytics-on-fhir-demo.git
+   cd hl7-eu-wg-2026-analytics-on-fhir-demo
+   ```
+
+2. Start Aidbox.
 
    ```sh
    mkdir -p aidbox && cd aidbox
@@ -110,10 +118,10 @@ On top of that:
    cd ..
    ```
 
-2. Open <http://localhost:8080> and activate the license with your Aidbox account.
+3. Open <http://localhost:8080> and activate the license with your Aidbox account.
    The first start takes one to three minutes.
 
-3. Check that the server answers. The scripts read the client secret from `aidbox/docker-compose.yaml`.
+4. Check that the server answers. The scripts read the client secret from `aidbox/docker-compose.yaml`.
 
    ```sh
    ./query.sh sql "select 1 as ok"
