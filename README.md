@@ -4,18 +4,10 @@ Four hands-on demos that take production-like FHIR data to flat tables, to a coh
 to an OMOP dataset, and finally to an extract that follows the rules of secondary use. Everything is a FHIR resource (ViewDefinition, Library,
 ValueSet, ConceptMap) loaded into a FHIR server and executed with the SQL on FHIR operations.
 
-## About the session
-
-These are the materials of the tutorial and workshop
-**"Analytics on FHIR: progress of the SQL on FHIR specification, FHIR to OMOP subproject"**,
-given by Aleksandr Penskoi (Health Samurai) at the HL7 Europe Working Group meeting
-on 19 November 2026, 13:30–15:00.
-
-The idea of the session: data recorded for care (primary use) is also needed for research and policy
-(secondary use). SQL on FHIR makes the transformation between the two explicit, shareable and testable,
-and FHIR to OMOP is the hardest test of that approach.
-
-Agenda and links for the session: <https://www.health-samurai.io/go/af4na2>
+Materials of the session **"Analytics on FHIR: progress of the SQL on FHIR specification, FHIR to OMOP subproject"**
+by Aleksandr Penskoi (Health Samurai), HL7 Europe Working Group meeting, 19 November 2026.
+Slides: <https://www.health-samurai.io/presentations/hl7-eu-wg-2026-analytics-on-fhir> ·
+agenda and links: <https://www.health-samurai.io/go/af4na2>
 
 ## Table of contents
 
@@ -43,9 +35,12 @@ Agenda and links for the session: <https://www.health-samurai.io/go/af4na2>
 | Port 8080 free, about 2 GB RAM | Aidbox listens on `localhost:8080`                       |
 | Internet access                | to pull the images and to activate the license           |
 
-Tested with Aidbox `edge`, build `791d207dcc` (17 November 2026).
+Tested on 19 November 2026 with Aidbox `edge`, build `791d207dcc` (built 10 November 2026).
 
 ## Repository layout
+
+<details>
+<summary>Directories, scripts and the <code>.sql</code> file convention</summary>
 
 | Path                     | What                                                                |
 |--------------------------|---------------------------------------------------------------------|
@@ -63,11 +58,6 @@ Tested with Aidbox `edge`, build `791d207dcc` (17 November 2026).
 | `reset.sh`               | empties the server, keeps the license                               |
 | `aidbox/`                | your Aidbox compose file (not in git, see [Setup](#setup))          |
 
-Everything the demos load, apart from the OMOP vocabulary tables and the Aidbox materializations, is a FHIR
-resource with a canonical URL: 8 ViewDefinitions, 17 SQLViews, 10 SQLQueries, a ValueSet and 3 ConceptMaps.
-The whole pipeline could therefore be packed into one FHIR package and installed on any FHIR server that
-supports SQL on FHIR. This repository does not build such a package yet.
-
 Every SQLView and SQLQuery is one `.sql` file. Its header comments carry the Library metadata:
 
 ```sql
@@ -83,7 +73,12 @@ select ...
 A SQLQuery may also declare `param: <name> <type>`, which becomes `Library.parameter`; the SQL refers to it as `:name`.
 These comments are a convention of this repository, not part of SQL on FHIR: `build.py` turns each file into a Library.
 
+</details>
+
 ### The data
+
+<details>
+<summary>1,201 synthetic patients in three clinics, messy on purpose</summary>
 
 1,201 synthetic patients in three clinics, 217 of them generated with diabetes, plus Maria (`p-0101`),
 the patient the story follows. **The mess is deliberate**:
@@ -102,6 +97,8 @@ On top of that:
 - 54 social findings recorded as Conditions ("Full-time employment", "Stress")
 - 5 hypertension diagnoses with a local code that nothing maps
 - 31 people with diabetes who opted out of secondary use, recorded as `Consent` resources
+
+</details>
 
 ## Setup
 
@@ -129,28 +126,8 @@ On top of that:
    1
    ```
 
-   Add `-v` to see the request as well, in a form you can paste into the Aidbox REST console
-   (<http://localhost:8080/u/rest>); `-n` prints the request without running it.
-
-   ```sh
-   ./query.sh -v sql "select 1 as ok"
-   ```
-
-   ```
-   Request:
-
-   POST /$psql
-   content-type: application/json
-
-   {
-     "query": "select 1 as ok"
-   }
-
-   Response:
-
-   ok
-   1
-   ```
+   `-v` also prints the request, ready to paste into the Aidbox REST console (<http://localhost:8080/u/rest>);
+   `-n` prints the request without running it.
 
 To log in to the Aidbox UI use `admin` and the value of `BOX_ADMIN_PASSWORD` from `aidbox/docker-compose.yaml`.
 
@@ -166,11 +143,11 @@ Goal: turn nested FHIR resources into flat tables with ViewDefinitions.
    ./load.sh 00-population/
    ```
 
-   In the UI: browse the loaded patients at <http://localhost:8080/u/resource/Patient>.
-
    Expected: `Patient: 1201`, `Organization: 3`, `Encounter: 2265`, `Condition: 277`, `Observation: 862`, `Consent: 31`.
 
-2. Look at Maria's diagnosis as the clinic stores it. In the UI: open
+   UI: <http://localhost:8080/u/resource/Patient>
+
+2. Look at Maria's diagnosis as the clinic stores it: open
    <http://localhost:8080/u/resource/Condition/edit/p-0101-t2d> and find `code.coding`.
 
    One Condition, four codings (SNOMED CT, ICD-10, a local code, a post-coordinated SNOMED expression),
@@ -182,14 +159,13 @@ Goal: turn nested FHIR resources into flat tables with ViewDefinitions.
    ./load.sh 01-1-view-definitions/
    ```
 
-4. Run the `conditions` view. In the UI: open <http://localhost:8080/u/analytics/views/edit/conditions>
-   and press **Run**.
-
-   Or from the terminal:
+4. Run the `conditions` view.
 
    ```sh
    ./query.sh ViewDefinition/conditions 5
    ```
+
+   UI: <http://localhost:8080/u/analytics/views/edit/conditions>, press **Run**.
 
    What to notice in the view:
 
@@ -211,25 +187,23 @@ Goal: turn nested FHIR resources into flat tables with ViewDefinitions.
    Her SNOMED CT code stays; the ICD-10 code, the local code and the post-coordinated expression are gone.
    Both shapes are legitimate; the view makes the choice visible.
 
-5. Materialize the views as database views in the schema `sof`.
-
-   This step is an Aidbox feature, not SQL on FHIR: the spec leaves it to the server whether a view is
-   stored or computed on the fly. Each file in `01-2-materialize/` is an `AidboxMaterialization` resource
-   that names the view, the schema and the kind of database object. Aidbox also has a plain `$materialize`
-   call; the resource keeps materialization manageable through the API, like every other artifact here.
+5. Materialize the views as database views in the schema `sof` (Aidbox, see [Things to know](#things-to-know)).
+   Each file in `01-2-materialize/` is an `AidboxMaterialization` resource that names the view, the schema
+   and the kind of database object.
 
    ```sh
    ./load.sh 01-2-materialize/
    ```
 
-   In the UI: browse the new view at <http://localhost:8080/u/database/schema/sof/conditions>.
+   UI: <http://localhost:8080/u/database/schema/sof/conditions>
 
-6. Query them with plain SQL. In the UI: open the DB console at <http://localhost:8080/u/db-console>,
-   paste the query below and run it. Or from the terminal:
+6. Query them with plain SQL.
 
    ```sh
    ./query.sh sql "select coding_idx, system, code from sof.conditions where patient_id = 'p-0101' order by coding_idx"
    ```
+
+   UI: the DB console at <http://localhost:8080/u/db-console>.
 
    Expected:
 
@@ -284,7 +258,7 @@ a ValueSet is just another table to join.
    ./query.sh Library/dq-obs-before-birth
    ```
 
-   In the UI: open <http://localhost:8080/u/analytics/queries/edit/dq-summary> and press **Run**.
+   UI: <http://localhost:8080/u/analytics/queries/edit/dq-summary>, press **Run**.
 
    Expected summary:
 
@@ -302,8 +276,7 @@ a ValueSet is just another table to join.
    ./query.sh sql "select system, code from sof.vs_diabetes order by 1, 2"
    ```
 
-   In the UI: open the DB console at <http://localhost:8080/u/db-console> and run the same query, or open
-   <http://localhost:8080/u/analytics/sqlview/edit/diabetes-codes> and press **Run**.
+   UI: the same query in the DB console, or <http://localhost:8080/u/analytics/sqlview/edit/diabetes-codes>, press **Run**.
 
    Expected:
 
@@ -320,9 +293,6 @@ a ValueSet is just another table to join.
    http://snomed.info/sct,73211009
    ```
 
-   This Aidbox build cannot materialize a ValueSet directly, only a ViewDefinition or a SQLView, which is why
-   the value set goes through a SQLView. As in demo 1, materialization is an Aidbox feature, not SQL on FHIR.
-
    Now the cohort. Look at `02-cohort/diabetes-cohort.sql`: the same ValueSet is a dependency
    and is joined on `system` and `code`. Three clinics, three coding habits, one join.
 
@@ -330,8 +300,7 @@ a ValueSet is just another table to join.
    ./query.sh Library/diabetes-cohort | tail -n +2 | wc -l
    ```
 
-   In the UI: open <http://localhost:8080/u/analytics/sqlview/edit/diabetes-cohort>, look at the SQL and its dependencies,
-   and press **Run**.
+   UI: <http://localhost:8080/u/analytics/sqlview/edit/diabetes-cohort>: the SQL, its dependencies, **Run**.
 
    Expected: `145` adults aged 18–75 with diabetes and a visit in 2026.
 
@@ -342,8 +311,7 @@ a ValueSet is just another table to join.
    ./query.sh Library/worklist
    ```
 
-   In the UI: open <http://localhost:8080/u/analytics/queries/edit/summary> and <http://localhost:8080/u/analytics/queries/edit/worklist>
-   and press **Run** in each.
+   UI: <http://localhost:8080/u/analytics/queries/edit/summary> and <http://localhost:8080/u/analytics/queries/edit/worklist>.
 
    Expected summary:
 
@@ -393,7 +361,7 @@ Goal: produce OMOP CDM tables from the same views, and see what a naive conversi
    ./query.sh sql "select concept_id, concept_name, domain_id, vocabulary_id, standard_concept, concept_code from omop.concept order by vocabulary_id, concept_code"
    ```
 
-   In the UI: browse the table at <http://localhost:8080/u/database/schema/omop/concept>.
+   UI: <http://localhost:8080/u/database/schema/omop/concept>
 
 3. Naive mapping against explicit mapping. `condition-mapped-naive.sql` uses inner joins to the vocabulary;
    `coding-resolved.sql` and `condition-mapped.sql` translate local codes through a ConceptMap,
@@ -403,8 +371,9 @@ Goal: produce OMOP CDM tables from the same views, and see what a naive conversi
    ./query.sh Library/naive-vs-explicit
    ```
 
-   In the UI: compare the SQL of <http://localhost:8080/u/analytics/sqlview/edit/condition-mapped-naive> and
-   <http://localhost:8080/u/analytics/sqlview/edit/condition-mapped>, then run <http://localhost:8080/u/analytics/queries/edit/naive-vs-explicit>.
+   UI: compare <http://localhost:8080/u/analytics/sqlview/edit/condition-mapped-naive> with
+   <http://localhost:8080/u/analytics/sqlview/edit/condition-mapped>, then run
+   <http://localhost:8080/u/analytics/queries/edit/naive-vs-explicit>.
 
    Expected, people with a diabetes diagnosis:
 
@@ -423,16 +392,16 @@ Goal: produce OMOP CDM tables from the same views, and see what a naive conversi
    ./query.sh Library/domain-routing
    ```
 
-   In the UI: open <http://localhost:8080/u/analytics/queries/edit/domain-routing> and press **Run**.
+   UI: <http://localhost:8080/u/analytics/queries/edit/domain-routing>
 
    Expected:
 
-   | target_domain | omop_table           | concept_name             | conditions |
-   |---------------|----------------------|--------------------------|------------|
-   | Condition     | condition_occurrence | Type 2 diabetes mellitus | 218        |
-   | Condition     | condition_occurrence | No matching concept      | 5          |
-   | Observation   | observation          | Full-time employment     | 40         |
-   | Observation   | observation          | Stress                   | 14         |
+   | target_domain | omop_table           | concept_id | concept_name             | conditions |
+   |---------------|----------------------|------------|--------------------------|------------|
+   | Condition     | condition_occurrence | 201826     | Type 2 diabetes mellitus | 218        |
+   | Condition     | condition_occurrence | 0          | No matching concept      | 5          |
+   | Observation   | observation          | 4053118    | Full-time employment     | 40         |
+   | Observation   | observation          | 4251306    | Stress                   | 14         |
 
    A Condition coded with both SNOMED CT and ICD-10 resolves to one concept and gives one OMOP row;
    `coding_idx` from demo 1 decides which coding supplies the source value.
@@ -443,15 +412,15 @@ Goal: produce OMOP CDM tables from the same views, and see what a naive conversi
    ./query.sh Library/unmapped-report
    ```
 
-   In the UI: open <http://localhost:8080/u/analytics/queries/edit/unmapped-report> and press **Run**.
+   UI: <http://localhost:8080/u/analytics/queries/edit/unmapped-report>
 
    Expected:
 
-   | clinic_id | source_code                 | codings | conditions_without_concept |
-   |-----------|-----------------------------|---------|----------------------------|
-   | clinic-1  | DIAB-T2                     | 1       | 0                          |
-   | clinic-1  | 44054006:246112005=24484000 | 1       | 0                          |
-   | clinic-2  | HTA                         | 5       | 5                          |
+   | clinic_id | source_system                 | source_code                 | codings | conditions_without_concept |
+   |-----------|-------------------------------|-----------------------------|---------|----------------------------|
+   | clinic-1  | http://clinic-1.example/codes | DIAB-T2                     | 1       | 0                          |
+   | clinic-1  | http://snomed.info/sct        | 44054006:246112005=24484000 | 1       | 0                          |
+   | clinic-2  | http://clinic-2.example/codes | HTA                         | 5       | 5                          |
 
    Maria's two extra codings are lost, but her Condition is still mapped through SNOMED CT.
    The five `HTA` Conditions have no concept at all and stay in `condition_occurrence` with `concept_id = 0`.
@@ -459,15 +428,13 @@ Goal: produce OMOP CDM tables from the same views, and see what a naive conversi
 6. Look at the OMOP tables.
 
    ```sh
-   ./query.sh Library/omop-person               | head -4
-   ./query.sh Library/omop-condition-occurrence | head -4
-   ./query.sh Library/omop-observation          | head -4
-   ./query.sh Library/omop-measurement          | head -4
-   ./query.sh Library/omop-visit-occurrence     | head -4
+   for t in person condition-occurrence observation measurement visit-occurrence; do
+     ./query.sh Library/omop-$t | head -4
+   done
    ```
 
-   In the UI: open <http://localhost:8080/u/analytics/sqlview/edit/omop-person> and press **Run**; the other tables are
-   next to it in the list at <http://localhost:8080/u/analytics/sqlview>.
+   UI: <http://localhost:8080/u/analytics/sqlview/edit/omop-person>; the other tables are next to it
+   in the list at <http://localhost:8080/u/analytics/sqlview>.
 
    Row counts: person 1,201 · condition_occurrence 223 · observation 54 · measurement 710 · visit_occurrence 2,265.
    In `measurement`, HbA1c reported in mmol/mol is converted to % and the original value and unit are kept
@@ -479,16 +446,10 @@ Goal: produce OMOP CDM tables from the same views, and see what a naive conversi
    ./query.sh Library/omop-follow-up
    ```
 
-   In the UI: open <http://localhost:8080/u/analytics/queries/edit/omop-follow-up> and press **Run**.
+   UI: <http://localhost:8080/u/analytics/queries/edit/omop-follow-up>
 
-   Expected: the same answer as in demo 2.
-
-   | clinic   | diabetics | needs_follow_up |
-   |----------|-----------|-----------------|
-   | clinic-1 | 72        | 13              |
-   | clinic-2 | 47        | 10              |
-   | clinic-3 | 26        | 6               |
-   | ALL      | 145       | 29              |
+   Expected: the same numbers as the summary in [demo 2](#demo-2-sqlview-sqlquery-and-terminology), step 4:
+   145 people with diabetes, 29 of them need a follow-up.
 
 ## Demo 4. Secondary-use rules as views
 
@@ -512,6 +473,8 @@ format: it is an illustration of three ideas with FHIR resources, views and SQL.
    ./query.sh Library/primary-vs-secondary
    ```
 
+   UI: <http://localhost:8080/u/analytics/queries/edit/primary-vs-secondary>
+
    Expected:
 
    | clinic   | care_cohort | care_call_list | opted_out | research_cohort |
@@ -524,11 +487,10 @@ format: it is an illustration of three ideas with FHIR resources, views and SQL.
    The call list still has 29 people: an opt-out from research does not remove anyone from care.
    The research cohort has 123. Of the 31 people who opted out, 22 are in the diabetes cohort.
 
-   In the UI: open <http://localhost:8080/u/analytics/queries/edit/primary-vs-secondary> and press **Run**.
-
-3. De-identified views. Three ViewDefinitions prepare data for research. In each, the patient id goes through
-   the Aidbox de-identification extension with the method `cryptoHash`: a keyed hash, so the same person gets
-   the same pseudonym in every view, and the id cannot be read back without the key.
+3. De-identified views (Aidbox, see [Things to know](#things-to-know)). Three ViewDefinitions prepare data
+   for research. In each, the patient id goes through the Aidbox de-identification extension with the method
+   `cryptoHash`: a keyed hash, so the same person gets the same pseudonym in every view, and the id cannot be
+   read back without the key.
 
    | ViewDefinition         | Columns                                             |
    |------------------------|-----------------------------------------------------|
@@ -545,14 +507,12 @@ format: it is an illustration of three ideas with FHIR resources, views and SQL.
    ```
    "pseudonym","gender","birth_date","clinic_id"
    "8e58c80a958df0efe21a4914c1092b249911204be69203f33f04814ffc3d2a97","female","1976-02-08","clinic-3"
+   "6c69f134b01cc2782da3b605c23cb6b27cf9532b8dd4b6ef6cd07537d736f2ba","male","1984-02-24","clinic-1"
+   "fe709c0531670960313ab0e8c177529a6cd4d9b0a450bf70e54dcc0cb05981f6","male","1983-02-14","clinic-2"
    ```
 
-   In the UI: open <http://localhost:8080/u/analytics/views/edit/research_patients>. The shield icon next to a
+   UI: <http://localhost:8080/u/analytics/views/edit/research_patients>. The shield icon next to a
    column opens the de-identification settings.
-
-   This is an Aidbox feature, not SQL on FHIR. The specification has no de-identification yet; issue
-   [#334](https://github.com/HL7/sql-on-fhir/issues/334) proposes it. Another runner may ignore the extension
-   and return the raw values.
 
 4. A minimised extract. `permit-person` and `permit-hba1c` are SQLViews over the de-identified views. They
    remove the people who opted out, by pseudonym, cut the birth date to the year and the test date to the
@@ -565,8 +525,8 @@ format: it is an illustration of three ideas with FHIR resources, views and SQL.
 
    Row counts: 1,170 people (1,201 minus 31 opt-outs), 422 HbA1c results.
 
-   In the UI: open <http://localhost:8080/u/analytics/sqlview/edit/permit-person>, read the SQL,
-   and press **Run**. What a study may see is a view someone can review and approve.
+   UI: <http://localhost:8080/u/analytics/sqlview/edit/permit-person>, read the SQL, press **Run**.
+   What a study may see is a view someone can review and approve.
 
 5. An aggregate answer. Some questions need no patient-level data at all. `data-request` returns counts
    by clinic and sex, and replaces any count below 5 with `<5`.
@@ -574,6 +534,8 @@ format: it is an illustration of three ideas with FHIR resources, views and SQL.
    ```sh
    ./query.sh Library/data-request
    ```
+
+   UI: <http://localhost:8080/u/analytics/queries/edit/data-request>
 
    Expected:
 
@@ -585,8 +547,6 @@ format: it is an illustration of three ideas with FHIR resources, views and SQL.
    | clinic-2  | male   | 18        | <5              |
    | clinic-3  | female | 12        | <5              |
    | clinic-3  | male   | 11        | <5              |
-
-   In the UI: open <http://localhost:8080/u/analytics/queries/edit/data-request> and press **Run**.
 
 What this demo does not do: the hash key is written in the ViewDefinitions and is not a secret, the threshold
 of 5 is arbitrary, and a `Consent` resource is one possible way to record an opt-out, not an agreed one.
@@ -670,21 +630,25 @@ cd aidbox && docker compose down -v
 - **`$run` returns 100 rows by default.** Pass `_limit`, as `query.sh ViewDefinition/<id> <limit>` does.
 - **Operation names.** `$run` on ViewDefinition and `$sqlquery-run` on Library are the names in this Aidbox build.
   SQL on FHIR version 3 defines one system-level operation for both, `$sql-run`, and `$sql-export` for bulk export.
-- **Materialization is Aidbox, not SQL on FHIR.** Demo 1, step 5 uses the `AidboxMaterialization` resource and
-  its `$materialize` operation. Nothing after that step depends on it: the Libraries read the ViewDefinitions,
-  not the `sof` views.
+- **Materialization is Aidbox, not SQL on FHIR.** The spec leaves it to the server whether a view is stored or
+  computed on the fly. Demo 1, step 5 uses the `AidboxMaterialization` resource, which keeps materialization
+  manageable through the API; Aidbox also has a plain `$materialize` call. This build cannot materialize a
+  ValueSet directly, only a ViewDefinition or a SQLView, so `sof.vs_diabetes` in demo 2 goes through a SQLView.
+  Nothing else depends on materialization: the Libraries read the ViewDefinitions, not the `sof` views.
 - **Demo 4 illustrates ideas, not EHDS requirements.** The opt-out as a `Consent`, the pseudonym and the
   small-cell threshold are modelling choices made for this demo.
 - **De-identification is Aidbox, not SQL on FHIR.** The `research_*` ViewDefinitions use an Aidbox extension
-  on their pseudonym column (Aidbox 2604 or newer). Its keys are stored in the ViewDefinition in plain text, and such
-  a view cannot be materialized through `AidboxMaterialization`. The EHDS Regulation (EU) 2025/327 gives the
-  right to opt out of secondary use (Article 71) and asks for anonymised or pseudonymised data (Article 66);
-  it sets no minimum cell size.
+  on their pseudonym column (Aidbox 2604 or newer). The specification has no de-identification yet; issue
+  [#334](https://github.com/HL7/sql-on-fhir/issues/334) proposes it, and another runner may ignore the extension
+  and return the raw values. The keys are stored in the ViewDefinition in plain text, and such a view cannot be
+  materialized through `AidboxMaterialization`. The EHDS Regulation (EU) 2025/327 gives the right to opt out of
+  secondary use (Article 71) and asks for anonymised or pseudonymised data (Article 66); it sets no minimum cell size.
 - **The data is synthetic.** The ICD-10-GM codes are illustrative. The post-coordinated SNOMED CT expression on
   Maria's Condition is valid: it was checked with `$validate-code` on tx.fhir.org.
 
 ## Links
 
+- [Slides of the session](https://www.health-samurai.io/presentations/hl7-eu-wg-2026-analytics-on-fhir)
 - [SQL on FHIR](https://sql-on-fhir.org) · [implementation guide](https://build.fhir.org/ig/HL7/sql-on-fhir/en/) · [repository](https://github.com/HL7/sql-on-fhir)
 - [fhir2omop](https://github.com/lampadephoros/fhir2omop): FHIR to OMOP with SQL on FHIR, the project this demo borrows its approach from
 - [OMOP Common Data Model](https://ohdsi.github.io/CommonDataModel/)
