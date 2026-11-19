@@ -264,7 +264,37 @@ a ValueSet is just another table to join.
    ./load.sh 02-cohort/
    ```
 
-2. Can we trust the data? Each check is a SQLView that returns the bad rows; the summary is a SQLQuery.
+2. Query the value set with SQL. The ValueSet `diabetes` is a FHIR resource, but SQL sees it as a table of codes.
+
+   The SQL on FHIR way: `diabetes-codes` is a SQLView that names the ValueSet as a dependency
+   (`-- depends-on: vs_diabetes ValueSet/diabetes`) and selects from it by its label. Any server
+   that supports SQL on FHIR resolves the label to the codes.
+
+   ```sh
+   ./query.sh Library/diabetes-codes
+   ```
+
+   UI: <http://localhost:8080/u/analytics/sqlview/edit/diabetes-codes>, press **Run**.
+
+   Plain SQL: `load.sh` also keeps that view in the database as `sof.vs_diabetes` (Aidbox, see
+   [Things to know](#things-to-know)). Raw SQL cannot declare a dependency, so it reads this table instead:
+
+   ```sh
+   ./query.sh sql "select system, code from sof.vs_diabetes order by 1, 2"
+   ```
+
+   UI: the same query in the DB console at <http://localhost:8080/u/db-console>.
+
+   Expected, nine codes from four systems (the SQLView also returns `display`):
+
+   ```
+   system,code
+   http://clinic-3.example/codes,DM2
+   http://fhir.de/CodeSystem/bfarm/icd-10-gm,E11.20
+   ...
+   ```
+
+3. Can we trust the data? Each check is a SQLView that returns the bad rows; the summary is a SQLQuery.
 
    ```sh
    ./query.sh Library/dq-summary
@@ -281,32 +311,7 @@ a ValueSet is just another table to join.
    | obs-before-birth    | plausibility | 3        |
    | unit-not-ucum       | conformance  | 6        |
 
-3. Who has diabetes? First, look at the ValueSet `diabetes` the way SQL sees it: a table of codes.
-   `diabetes-codes` is a SQLView that names the ValueSet as a dependency and selects from it by its label.
-   `load.sh` also keeps that view in the database as `sof.vs_diabetes`, so plain SQL works:
-
-   ```sh
-   ./query.sh sql "select system, code from sof.vs_diabetes order by 1, 2"
-   ```
-
-   UI: the same query in the DB console, or <http://localhost:8080/u/analytics/sqlview/edit/diabetes-codes>, press **Run**.
-
-   Expected:
-
-   ```
-   system,code
-   http://clinic-3.example/codes,DM2
-   http://fhir.de/CodeSystem/bfarm/icd-10-gm,E11.20
-   http://fhir.de/CodeSystem/bfarm/icd-10-gm,E11.90
-   http://fhir.de/CodeSystem/bfarm/icd-10-gm,E11.91
-   http://hl7.org/fhir/sid/icd-10,E11.22
-   http://hl7.org/fhir/sid/icd-10,E11.65
-   http://hl7.org/fhir/sid/icd-10,E11.9
-   http://snomed.info/sct,44054006
-   http://snomed.info/sct,73211009
-   ```
-
-   Now the cohort. Look at `02-cohort/diabetes-cohort.sql`: the same ValueSet is a dependency
+4. Who has diabetes? Look at `02-cohort/diabetes-cohort.sql`: the same ValueSet is a dependency
    and is joined on `system` and `code`. Three clinics, three coding habits, one join.
 
    ```sh
@@ -317,7 +322,7 @@ a ValueSet is just another table to join.
 
    Expected: `145` adults aged 18–75 with diabetes and a visit in 2026.
 
-4. Who needs a call? `hba1c-status` takes the latest HbA1c of 2026 per person and converts mmol/mol to %.
+5. Who needs a call? `hba1c-status` takes the latest HbA1c of 2026 per person and converts mmol/mol to %.
 
    ```sh
    ./query.sh Library/summary
@@ -338,7 +343,7 @@ a ValueSet is just another table to join.
    The worklist has 29 rows. Maria (`p-0101`, HbA1c 10.2%) is one of them; 19 people are there
    because they had no test this year, not because their result is high.
 
-5. A query with a parameter. `cohort-by-clinic` lists the cohort of one clinic. The file declares the
+6. A query with a parameter. `cohort-by-clinic` lists the cohort of one clinic. The file declares the
    parameter in its header (`-- param: clinic string`), which becomes `Library.parameter`, and the SQL
    refers to it as `:clinic`. The value is passed by name:
 
@@ -461,7 +466,7 @@ Goal: produce OMOP CDM tables from the same views, and see what a naive conversi
 
    UI: <http://localhost:8080/u/analytics/queries/edit/omop-follow-up>
 
-   Expected: the same numbers as the summary in [demo 2](#demo-2-sqlview-sqlquery-and-terminology), step 4:
+   Expected: the same numbers as the summary in [demo 2](#demo-2-sqlview-sqlquery-and-terminology), step 5:
    145 people with diabetes, 29 of them need a follow-up.
 
 ## Demo 4. Secondary-use rules as views
