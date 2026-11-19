@@ -81,7 +81,7 @@ These comments are a convention of this repository, not part of SQL on FHIR: `bu
 <details>
 <summary>1,201 synthetic patients in three clinics, messy on purpose</summary>
 
-1,201 synthetic patients in three clinics, 217 of them generated with diabetes, plus Maria (`p-0101`),
+1,201 synthetic patients in three clinics, 217 of them generated with diabetes, plus Maria Silva (`p-0101`, born 1968),
 the patient the story follows. **The mess is deliberate**:
 
 | Clinic   | Diagnosis codes                  | HbA1c units    |
@@ -137,15 +137,7 @@ On top of that:
    `-v` also prints the request, ready to paste into the Aidbox REST console (<http://localhost:8080/u/rest>);
    `-n` prints the request without running it.
 
-To log in to the Aidbox UI use `admin` and the value of `BOX_ADMIN_PASSWORD` from `aidbox/docker-compose.yaml`.
-
-## Demo 1. ViewDefinition in action
-
-*`forEach`, `%rowIndex`, `$run` and materialization.*
-
-Goal: turn nested FHIR resources into flat tables with ViewDefinitions.
-
-1. Load the population.
+5. Load the population, the synthetic data every demo uses (see [The data](#the-data)).
 
    ```sh
    ./load.sh 00-population/
@@ -155,19 +147,28 @@ Goal: turn nested FHIR resources into flat tables with ViewDefinitions.
 
    UI: <http://localhost:8080/u/resource/Patient>
 
-2. Look at Maria's diagnosis as the clinic stores it: open
+To log in to the Aidbox UI use `admin` and the value of `BOX_ADMIN_PASSWORD` from `aidbox/docker-compose.yaml`.
+
+## Demo 1. ViewDefinition in action
+
+*`forEach`, `%rowIndex`, `$run` and materialization.*
+
+Goal: turn nested FHIR resources into flat tables with ViewDefinitions.
+
+1. Look at Maria's diagnosis as the clinic stores it. Maria Silva, born 1968, is the only Maria of that year:
+   `GET /fhir/Patient?name=maria&birthdate=1968` in the REST console finds her. Then open
    <http://localhost:8080/u/resource/Condition/edit/p-0101-t2d> and find `code.coding`.
 
    One Condition, four codings (SNOMED CT, ICD-10, a local code, a post-coordinated SNOMED expression),
    a choice type `onsetDateTime`, a reference to the patient.
 
-3. Load the ViewDefinitions.
+2. Load the ViewDefinitions.
 
    ```sh
    ./load.sh 01-1-view-definitions/
    ```
 
-4. Run the `conditions` view.
+3. Run the `conditions` view.
 
    ```sh
    ./query.sh ViewDefinition/conditions 5
@@ -184,18 +185,22 @@ Goal: turn nested FHIR resources into flat tables with ViewDefinitions.
    | `onset.ofType(dateTime)`           | unwraps the choice type `onset[x]`                |
    | `subject.getReferenceKey(Patient)` | turns the reference into a join key               |
 
-   Try an edit without saving: replace the whole `forEach` block with one column that takes the first coding,
+   Try an edit without saving: replace the whole `forEach` block with columns that take the first coding,
    and run again.
 
    ```json
-   { "column": [ { "name": "code", "path": "code.coding.first().code" } ] }
+   { "column": [
+       { "name": "system", "path": "code.coding.first().system" },
+       { "name": "code",   "path": "code.coding.first().code" } ] }
    ```
+
+   Hint: `code.coding.first()` picks the first coding, so system and code come from the same one.
 
    Now there is one row per Condition: 277 rows instead of 403, and Maria has one row instead of four.
    Her SNOMED CT code stays; the ICD-10 code, the local code and the post-coordinated expression are gone.
    Both shapes are legitimate; the view makes the choice visible.
 
-5. Materialize the views as database views in the schema `sof` (Aidbox, see [Things to know](#things-to-know)).
+4. Materialize the views as database views in the schema `sof` (Aidbox, see [Things to know](#things-to-know)).
    Each file in `01-2-materialize/` is an `AidboxMaterialization` resource that names the view, the schema
    and the kind of database object.
 
@@ -205,7 +210,7 @@ Goal: turn nested FHIR resources into flat tables with ViewDefinitions.
 
    UI: <http://localhost:8080/u/database/schema/sof/conditions>
 
-6. Query them with plain SQL.
+5. Query them with plain SQL.
 
    ```sh
    ./query.sh sql "select coding_idx, system, code from sof.conditions where patient_id = 'p-0101' order by coding_idx"
@@ -639,7 +644,7 @@ cd aidbox && docker compose down -v
 - **Operation names.** `$run` on ViewDefinition and `$sqlquery-run` on Library are the names in this Aidbox build.
   SQL on FHIR version 3 defines one system-level operation for both, `$sql-run`, and `$sql-export` for bulk export.
 - **Materialization is Aidbox, not SQL on FHIR.** The spec leaves it to the server whether a view is stored or
-  computed on the fly. Demo 1, step 5 uses the `AidboxMaterialization` resource, which keeps materialization
+  computed on the fly. Demo 1, step 4 uses the `AidboxMaterialization` resource, which keeps materialization
   manageable through the API; Aidbox also has a plain `$materialize` call. This build cannot materialize a
   ValueSet directly, only a ViewDefinition or a SQLView, so `sof.vs_diabetes` in demo 2 goes through a SQLView.
   Nothing else depends on materialization: the Libraries read the ViewDefinitions, not the `sof` views.
