@@ -55,7 +55,7 @@ Tested with Aidbox `edge`, build `791d207dcc` (17 November 2026).
 | `02-cohort/`             | demo 2: ValueSet, data quality checks, cohort, follow-up queries    |
 | `02-cohort/materialize/` | demo 2: the value set as a database view (Aidbox, not the spec)     |
 | `03-omop/`               | demo 3: OMOP vocabulary subset, ConceptMaps, mapping views, reports |
-| `04-ehds/`               | demo 4: opt-outs, a minimised research extract, an aggregate answer |
+| `04-ehds/`               | demo 4: opt-outs, de-identified views, an extract, an aggregate     |
 | `build.py`               | packs a stage directory into one bundle (`build/<stage>.json`)      |
 | `package.py`             | packs all artifacts into one FHIR package (`build/*.tgz`)           |
 | `load.sh`                | loads the demo, one directory at a time                             |
@@ -64,7 +64,7 @@ Tested with Aidbox `edge`, build `791d207dcc` (17 November 2026).
 | `aidbox/`                | your Aidbox compose file (not in git, see [Setup](#setup))          |
 
 Everything the demos load, apart from the OMOP vocabulary tables and the Aidbox materializations, is a FHIR
-resource with a canonical URL: 5 ViewDefinitions, 17 SQLViews, 10 SQLQueries, a ValueSet and 3 ConceptMaps.
+resource with a canonical URL: 8 ViewDefinitions, 17 SQLViews, 10 SQLQueries, a ValueSet and 3 ConceptMaps.
 The whole pipeline could therefore be packed into one FHIR package and installed on any FHIR server that
 supports SQL on FHIR. This repository does not build such a package yet.
 
@@ -492,11 +492,11 @@ Goal: produce OMOP CDM tables from the same views, and see what a naive conversi
 
 ## Demo 4. Secondary-use rules as views
 
-*`Consent` opt-out, a pseudonymised extract, small-cell suppression.*
+*`Consent` opt-out, de-identified views, small-cell suppression.*
 
 Goal: show that the rules which separate secondary use from care can be written as the same kind of artifact.
 The European Health Data Space is the reason this matters in Europe, but nothing here is an official EHDS
-format: it is an illustration of three ideas with plain FHIR resources and SQL.
+format: it is an illustration of three ideas with FHIR resources, views and SQL.
 
 1. Load the artifacts.
 
@@ -522,13 +522,41 @@ format: it is an illustration of three ideas with plain FHIR resources and SQL.
    | ALL      | 145         | 29             | 22        | 123             |
 
    The call list still has 29 people: an opt-out from research does not remove anyone from care.
-   The research cohort has 123.
+   The research cohort has 123. Of the 31 people who opted out, 22 are in the diabetes cohort.
 
    In the UI: open <http://localhost:8080/u/analytics/queries/edit/primary-vs-secondary> and press **Run**.
 
-3. A minimised extract. `permit-person` and `permit-hba1c` are what a study on glycaemic control would
-   receive: no opt-outs, a pseudonym instead of the patient id, year of birth instead of the date,
-   month of the test instead of the day, and no other columns.
+3. De-identified views. Three ViewDefinitions prepare data for research. In each, the patient id goes through
+   the Aidbox de-identification extension with the method `cryptoHash`: a keyed hash, so the same person gets
+   the same pseudonym in every view, and the id cannot be read back without the key.
+
+   | ViewDefinition         | Columns                                             |
+   |------------------------|-----------------------------------------------------|
+   | `research_patients`    | `pseudonym`, `gender`, `birth_date`, `clinic_id`    |
+   | `research_lab_results` | `pseudonym`, `effective`, `value`, `unit`, the code |
+   | `research_optouts`     | `pseudonym` of everyone who opted out               |
+
+   ```sh
+   ./query.sh ViewDefinition/research_patients 3
+   ```
+
+   Expected:
+
+   ```
+   "pseudonym","gender","birth_date","clinic_id"
+   "8e58c80a958df0efe21a4914c1092b249911204be69203f33f04814ffc3d2a97","female","1976-02-08","clinic-3"
+   ```
+
+   In the UI: open <http://localhost:8080/u/analytics/views/edit/research_patients>. The shield icon next to a
+   column opens the de-identification settings.
+
+   This is an Aidbox feature, not SQL on FHIR. The specification has no de-identification yet; issue
+   [#334](https://github.com/HL7/sql-on-fhir/issues/334) proposes it. Another runner may ignore the extension
+   and return the raw values.
+
+4. A minimised extract. `permit-person` and `permit-hba1c` are SQLViews over the de-identified views. They
+   remove the people who opted out, by pseudonym, cut the birth date to the year and the test date to the
+   month, and keep only the columns a study on glycaemic control needs.
 
    ```sh
    ./query.sh Library/permit-person | head -4
@@ -538,9 +566,9 @@ format: it is an illustration of three ideas with plain FHIR resources and SQL.
    Row counts: 1,170 people (1,201 minus 31 opt-outs), 422 HbA1c results.
 
    In the UI: open <http://localhost:8080/u/analytics/sqlview/edit/permit-person>, read the SQL,
-   and press **Run**. What leaves the organisation is a view someone can review and approve.
+   and press **Run**. What a study may see is a view someone can review and approve.
 
-4. An aggregate answer. Some questions need no patient-level data at all. `data-request` returns counts
+5. An aggregate answer. Some questions need no patient-level data at all. `data-request` returns counts
    by clinic and sex, and replaces any count below 5 with `<5`.
 
    ```sh
@@ -560,19 +588,19 @@ format: it is an illustration of three ideas with plain FHIR resources and SQL.
 
    In the UI: open <http://localhost:8080/u/analytics/queries/edit/data-request> and press **Run**.
 
-What this demo does not do: the pseudonym is an `md5` hash with the salt written in the SQL, the threshold
+What this demo does not do: the hash key is written in the ViewDefinitions and is not a secret, the threshold
 of 5 is arbitrary, and a `Consent` resource is one possible way to record an opt-out, not an agreed one.
-Real pseudonymisation, disclosure control and the legal process are outside its scope.
+Real key management, disclosure control and the legal process are outside its scope.
 
 ## The whole demo as one FHIR package
 
-Everything the four demos load, apart from the data, is 36 FHIR resources: 5 ViewDefinitions, 17 SQLViews,
+Everything the four demos load, apart from the data, is 39 FHIR resources: 8 ViewDefinitions, 17 SQLViews,
 10 SQLQueries, 1 ValueSet and 3 ConceptMaps. `package.py` packs them into one FHIR package, the same format
 implementation guides are published in.
 
 ```sh
 python3 package.py
-# build/org.example.analytics-on-fhir-0.1.0.tgz: 36 resources
+# build/org.example.analytics-on-fhir-0.1.0.tgz: 39 resources
 ```
 
 To see that the package alone is enough, install it on a server that holds only the data:
@@ -629,6 +657,9 @@ cd aidbox && docker compose down -v
   ICD-10-GM codes, start at 2,000,000,000 and are not OMOP concept ids. The "Maps to" rows are simplified: every
   diabetes code maps straight to 201826, while Athena maps some of them to more specific concepts.
   Use Athena (<https://athena.ohdsi.org>) for real work.
+- **The OMOP tables are views, and a subset.** Each `omop-*` SQLView uses the column names of OMOP CDM v5.4:
+  every required column, 47 of the 101 columns of these six tables in all. Nothing checks types or constraints,
+  so this is not a validated OMOP database.
 - **The OMOP ids are row numbers.** `person_id` and the other keys are `row_number()` over the source id:
   stable for this dataset, not a general solution.
 - **Dependency labels must not be FHIR resource names.** In this Aidbox build a label such as `patient`
@@ -643,7 +674,10 @@ cd aidbox && docker compose down -v
   its `$materialize` operation. Nothing after that step depends on it: the Libraries read the ViewDefinitions,
   not the `sof` views.
 - **Demo 4 illustrates ideas, not EHDS requirements.** The opt-out as a `Consent`, the pseudonym and the
-  small-cell threshold are modelling choices made for this demo. The EHDS Regulation (EU) 2025/327 gives the
+  small-cell threshold are modelling choices made for this demo.
+- **De-identification is Aidbox, not SQL on FHIR.** The `research_*` ViewDefinitions use an Aidbox extension
+  on their pseudonym column (Aidbox 2604 or newer). Its keys are stored in the ViewDefinition in plain text, and such
+  a view cannot be materialized through `AidboxMaterialization`. The EHDS Regulation (EU) 2025/327 gives the
   right to opt out of secondary use (Article 71) and asks for anonymised or pseudonymised data (Article 66);
   it sets no minimum cell size.
 - **The data is synthetic.** The ICD-10-GM codes are illustrative. The post-coordinated SNOMED CT expression on

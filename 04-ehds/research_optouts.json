@@ -1,0 +1,45 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "research_optouts",
+  "url": "https://example.org/aof/ViewDefinition/research_optouts",
+  "name": "research_optouts",
+  "title": "Opt-outs from secondary use, by pseudonym",
+  "status": "active",
+  "resource": "Consent",
+  "select": [
+    {
+      "column": [
+        {
+          "name": "pseudonym",
+          "path": "patient.getReferenceKey(Patient)",
+          "extension": [
+            {
+              "url": "http://health-samurai.io/fhir/core/StructureDefinition/de-identification",
+              "extension": [
+                {
+                  "url": "method",
+                  "valueCode": "cryptoHash"
+                },
+                {
+                  "url": "cryptoHashKey",
+                  "valueString": "demo-key-not-a-secret"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "where": [
+    {
+      "path": "status = 'active'"
+    },
+    {
+      "path": "provision.type = 'deny'"
+    },
+    {
+      "path": "scope.coding.where(code = 'research').exists()"
+    }
+  ]
+}

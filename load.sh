@@ -5,7 +5,7 @@
 #   ./load.sh 01-2-materialize/      demo 1: the views as database views in the schema sof (Aidbox feature)
 #   ./load.sh 02-cohort/             demo 2: ValueSet, data quality checks, cohort, follow-up queries
 #   ./load.sh 03-omop/               demo 3: OMOP vocabulary subset, ConceptMaps, mapping and OMOP views
-#   ./load.sh 04-ehds/               demo 4: opt-outs, a minimised research extract, an aggregate answer
+#   ./load.sh 04-ehds/               demo 4: opt-outs, de-identified views, a research extract, an aggregate answer
 #   ./load.sh all                    everything, in this order
 set -euo pipefail
 cd "$(dirname "$0")"

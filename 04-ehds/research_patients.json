@@ -1,0 +1,47 @@
+{
+  "resourceType": "ViewDefinition",
+  "id": "research_patients",
+  "url": "https://example.org/aof/ViewDefinition/research_patients",
+  "name": "research_patients",
+  "title": "Research extract, people: a pseudonym, no other identifiers",
+  "status": "active",
+  "resource": "Patient",
+  "select": [
+    {
+      "column": [
+        {
+          "name": "pseudonym",
+          "path": "getResourceKey()",
+          "extension": [
+            {
+              "url": "http://health-samurai.io/fhir/core/StructureDefinition/de-identification",
+              "extension": [
+                {
+                  "url": "method",
+                  "valueCode": "cryptoHash"
+                },
+                {
+                  "url": "cryptoHashKey",
+                  "valueString": "demo-key-not-a-secret"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "gender",
+          "path": "gender"
+        },
+        {
+          "name": "birth_date",
+          "path": "birthDate",
+          "type": "date"
+        },
+        {
+          "name": "clinic_id",
+          "path": "managingOrganization.getReferenceKey(Organization)"
+        }
+      ]
+    }
+  ]
+}

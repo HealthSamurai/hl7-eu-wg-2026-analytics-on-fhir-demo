@@ -1,14 +1,13 @@
 -- id: permit-hba1c
--- title: Research extract, HbA1c results of the people in the extract
+-- title: Research extract, HbA1c results of the people in the extract, month of the test only
 -- type: sql-view
--- depends-on: person Library/omop-person
--- depends-on: measurement Library/omop-measurement
--- depends-on: optouts ViewDefinition/optouts
-select md5('demo-salt:' || p.person_source_value) as person_pseudonym,
-       date_trunc('month', m.measurement_date)::date as measurement_month,  -- month, not the exact day
-       m.value_as_number                             as hba1c_pct
-from measurement m
-join person p on p.person_id = m.person_id
-where m.measurement_concept_id = 3004410
-  and m.value_as_number is not null
-  and not exists (select 1 from optouts o where o.patient_id = p.person_source_value)
+-- depends-on: labs ViewDefinition/research_lab_results
+-- depends-on: optouts ViewDefinition/research_optouts
+select l.pseudonym,
+       left(l.effective::text, 7) as measurement_month,   -- the month only
+       case l.unit when 'mmol/mol' then round(l.value::numeric * 0.0915 + 2.15, 1)
+                   else l.value::numeric end as hba1c_pct
+from labs l
+where l.code = '4548-4'
+  and l.value is not null
+  and not exists (select 1 from optouts o where o.pseudonym = l.pseudonym)
